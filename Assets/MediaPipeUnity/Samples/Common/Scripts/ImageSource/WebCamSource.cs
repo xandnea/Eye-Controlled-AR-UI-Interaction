@@ -116,6 +116,7 @@ namespace Mediapipe.Unity
 
     private IEnumerator Initialize()
     {
+        
       yield return GetPermission();
 
       if (!_IsPermitted)
@@ -285,6 +286,37 @@ namespace Mediapipe.Unity
         // prefer smaller frame rate
         return (int)(a.frameRate - b.frameRate);
       }
+    }
+    private void LogAvailableCameras()
+    {
+      WebCamDevice[] devices = WebCamTexture.devices;
+
+      Debug.Log("=== WEBCAM DIAGNOSTICS START ===");
+      Debug.Log("Total cameras detected by Android: " + devices.Length);
+
+      bool frontCamFound = false;
+
+      foreach (var device in devices)
+      {
+        string facing = device.isFrontFacing ? "FRONT" : "BACK";
+        Debug.Log($"Camera Name: [{device.name}] | Facing: [{facing}]");
+
+        if (device.isFrontFacing)
+        {
+          frontCamFound = true;
+        }
+      }
+
+      if (frontCamFound)
+      {
+        Debug.Log("SUCCESS: Front camera detected and available to Unity!");
+      }
+      else
+      {
+        Debug.LogError("FAILED: No front camera detected by Unity! Check Android permissions.");
+      }
+      
+      Debug.Log("=== WEBCAM DIAGNOSTICS END ===");
     }
   }
 }
