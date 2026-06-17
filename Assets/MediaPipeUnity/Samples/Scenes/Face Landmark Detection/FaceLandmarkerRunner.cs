@@ -19,6 +19,8 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 
     public readonly FaceLandmarkDetectionConfig config = new FaceLandmarkDetectionConfig();
 
+    public event System.Action<Vector2, Vector2> OnIrisCoordinatesDetected;
+
     public override void Stop()
     {
       base.Stop();
@@ -130,6 +132,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
             if (taskApi.TryDetect(image, imageProcessingOptions, ref result))
             {
               _faceLandmarkerResultAnnotationController.DrawNow(result);
+              ExtractAndEmitIrisCoordinates(result);
             }
             else
             {
@@ -140,6 +143,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
             if (taskApi.TryDetectForVideo(image, GetCurrentTimestampMillisec(), imageProcessingOptions, ref result))
             {
               _faceLandmarkerResultAnnotationController.DrawNow(result);
+              ExtractAndEmitIrisCoordinates(result);
             }
             else
             {
@@ -156,6 +160,40 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
     private void OnFaceLandmarkDetectionOutput(FaceLandmarkerResult result, Image image, long timestamp)
     {
       _faceLandmarkerResultAnnotationController.DrawLater(result);
+      ExtractAndEmitIrisCoordinates(result);
+    }
+
+    private void ExtractAndEmitIrisCoordinates(FaceLandmarkerResult result)
+    {
+      if (result.faceLandmarks == null || result.faceLandmarks.Count == 0) return;
+
+      var landmarks = result.faceLandmarks[0].landmarks;
+      if (landmarks.Count < 474) return;
+
+      // 1. Define Landmarks
+      Vector2 noseTip = new Vector2(landmarks[1].x, landmarks[1].y);
+      Vector2 rightIris = new Vector2(landmarks[468].x, landmarks[468].y);
+      Vector2 leftIris = new Vector2(landmarks[473].x, landmarks[473].y);
+
+      // 2. Define Eye Sockets (Crucial: These move with head rotation)
+      // Landmark 159 is upper eyelid, 145 is lower (approximation of eye center)
+      Vector2 rightEyeCenter = (new Vector2(landmarks[159].x, landmarks[159].y) + new Vector2(landmarks[145].x, landmarks[145].y)) * 0.5f;
+      Vector2 leftEyeCenter = (new Vector2(landmarks[386].x, landmarks[386].y) +  new Vector2(landmarks[374].x, landmarks[374].y)) * 0.5f;
+
+      // 3. Calculate Relative Gaze (Iris - EyeSocket)
+      // This vector represents rotation within the socket, independent of head position
+      Vector2 rightGazeRelative = rightIris - rightEyeCenter;
+      Vector2 leftGazeRelative = leftIris - leftEyeCenter;
+
+      // 4. Normalize by Head Scale (Distance between eye centers)
+      // This prevents gaze sensitivity from changing when the user moves closer/further from the cam
+      float headScale = Vector2.Distance(rightEyeCenter, leftEyeCenter);
+      Vector2 normalizedGaze = (rightGazeRelative + leftGazeRelative) * 0.5f / headScale;
+
+      Debug.Log("Normalized Gaze: " + normalizedGaze);
+
+      // 5. Emit normalized vector
+      OnIrisCoordinatesDetected?.Invoke(normalizedGaze, noseTip);
     }
   }
 }
