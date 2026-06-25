@@ -1,63 +1,104 @@
 using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+using Mediapipe.Tasks.Vision.FaceLandmarker;
 using Mediapipe.Unity.Sample.FaceLandmarkDetection;
+using UnityEngine;
 
 public class GazeCalibration : MonoBehaviour
 {
-    public enum State { Setup, TopLeft, TopRight, BottomRight, BottomLeft, Tracking, Calibrating }
-
-    [Header("State")]
-    public State currentState = State.Setup;
-
     [Header("References")]
     public FaceLandmarkerRunner faceLandmarkerRunner;
-    public RectTransform calibrationTarget;
-    public RectTransform gazeIndicator;
+    public GazeVisualizer gazeVisualizer;
     public TMPro.TextMeshProUGUI statusInstructionsText;
 
     [Header("Settings")]
-    public float calibrationSampleDuration = 1.5f;
-    [Range(0.01f, 1f)] public float alpha = 0.12f;
-    [Range(0.05f, 0.2f)] public float padding = 0.1f;
+    public float calibrationDuration = 5f;
 
-    private Vector2 rawCalibTL, rawCalibTR, rawCalibBL, rawCalibBR;
-    private Vector2 liveSmoothedGaze = Vector2.zero;
-    private List<Vector2> collectionBuffer = new List<Vector2>();
-    private bool isDataCollectionWindowOpen = false;
+    private bool _isCalibrating = false;
 
-    private readonly object _threadLock = new object();
-    private Vector2 _pendingGaze;
-    private bool _hasNewData = false;
+    [Header("Calibration Bounds")]
+    private float minLeftX = float.MaxValue, maxLeftX = float.MinValue;
+    private float minRightX = float.MaxValue, maxRightX = float.MinValue;
+    private float minLeftY = float.MaxValue, maxLeftY = float.MinValue;
+    private float minRightY = float.MaxValue, maxRightY = float.MinValue;
 
-    void Start()
+    private void Start()
     {
-        statusInstructionsText.gameObject.SetActive(true);
-        calibrationTarget.gameObject.SetActive(true);
-        gazeIndicator.gameObject.SetActive(false);
+        // Ensure Visualizer is off until calibration completes
+        gazeVisualizer.enabled = false;
+        StartCoroutine(CalibrationRoutine());
     }
 
     private void OnEnable()
     {
         if (faceLandmarkerRunner != null)
-        {
-            faceLandmarkerRunner.OnIrisCoordinatesDetected += HandleIrisCoordinates; 
-        }
+            faceLandmarkerRunner.OnFaceLandmarksDetected += ProcessCalibrationData;
     }
 
     private void OnDisable()
     {
         if (faceLandmarkerRunner != null)
-        {
-            faceLandmarkerRunner.OnIrisCoordinatesDetected -= HandleIrisCoordinates;
-        }
+            faceLandmarkerRunner.OnFaceLandmarksDetected -= ProcessCalibrationData;
     }
 
-    private void HandleIrisCoordinates(Vector2 leftIris, Vector2 rightIris)
+    private IEnumerator CalibrationRoutine()
     {
-        // average the eyes for a single gaze point
-        Vector2 centerGaze = (leftIris + rightIris) * 0.5f;
-        //Debug.Log("Center Gaze: " + centerGaze);
+        statusInstructionsText.gameObject.SetActive(true);
+        statusInstructionsText.text = "Gaze Calibration:\nLook as far up/down and left/right as you can without moving your head.";
+
+        _isCalibrating = true;
+        yield return new WaitForSeconds(calibrationDuration);
+        _isCalibrating = false;
+
+        statusInstructionsText.text = "Calibration Complete!";
+        yield return new WaitForSeconds(1f);
+        statusInstructionsText.gameObject.SetActive(false);
+
+        // Pass the bounds to the visualizer and enable it
+        gazeVisualizer.SetCalibrationBounds(
+            minLeftX, maxLeftX, minLeftY, maxLeftY,
+            minRightX, maxRightX, minRightY, maxRightY
+        );
+
+        gazeVisualizer.enabled = true;
+        this.enabled = false; // Turn off calibration script
+    }
+
+    private void ProcessCalibrationData(FaceLandmarkerResult result)
+    {
+        if (!_isCalibrating || result.faceLandmarks == null || result.faceLandmarks.Count == 0) return;
+
+        var landmarks = result.faceLandmarks[0].landmarks;
+        if (landmarks.Count < 474) return;
+
+        // Original Bounding Box
+        float rEyeLookingR = landmarks[33].x;
+        float rEyeLookingL = landmarks[133].x;
+        float lEyeLookingR = landmarks[362].x;
+        float lEyeLookingL = landmarks[263].x;
+        float rEyeLookingU = landmarks[28].y;
+        float rEyeLookingD = landmarks[230].y;
+        float lEyeLookingU = landmarks[258].y;
+        float lEyeLookingD = landmarks[450].y;
+
+        Vector2 rightIris = new Vector2(landmarks[468].x, landmarks[468].y);
+        Vector2 leftIris = new Vector2(landmarks[473].x, landmarks[473].y);
+
+        // Calculate raw ratios (Iris position relative to the socket bounds)
+        // Ratio = (Iris - MinBound) / (MaxBound - MinBound)
+        float rawRightX = (rightIris.x - rEyeLookingR) / (rEyeLookingL - rEyeLookingR);
+        float rawRightY = (rightIris.y - rEyeLookingU) / (rEyeLookingD - rEyeLookingU);
+        float rawLeftX = (leftIris.x - lEyeLookingR) / (lEyeLookingL - lEyeLookingR);
+        float rawLeftY = (leftIris.y - lEyeLookingU) / (lEyeLookingD - lEyeLookingU);
+
+        // Record Extremities
+        if (rawRightX < minRightX) minRightX = rawRightX;
+        if (rawRightX > maxRightX) maxRightX = rawRightX;
+        if (rawRightY < minRightY) minRightY = rawRightY;
+        if (rawRightY > maxRightY) maxRightY = rawRightY;
+
+        if (rawLeftX < minLeftX) minLeftX = rawLeftX;
+        if (rawLeftX > maxLeftX) maxLeftX = rawLeftX;
+        if (rawLeftY < minLeftY) minLeftY = rawLeftY;
+        if (rawLeftY > maxLeftY) maxLeftY = rawLeftY;
     }
 }
