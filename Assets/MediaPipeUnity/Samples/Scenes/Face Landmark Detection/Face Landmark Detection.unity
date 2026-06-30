@@ -152,8 +152,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   faceLandmarkerRunner: {fileID: 1064799469}
+  gazeCanvas: {fileID: 1418154907}
   rayLength: 1000000
-  rayColor: {r: 0.6862745, g: 0.21568629, b: 0.86274517, a: 1}
+  normalColor: {r: 0, g: 0, b: 1, a: 1}
+  gazeColor: {r: 1, g: 0, b: 0, a: 1}
   headAlpha: 0.3
 --- !u!4 &188766220
 Transform:
@@ -615,7 +617,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: INSTRUCTIONS
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -642,8 +644,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 61.62
-  m_fontSizeBase: 61.62
+  m_fontSize: 40
+  m_fontSizeBase: 40
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -715,6 +717,11 @@ RectTransform:
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 3259285889726014650, guid: 5713b959e3c77a58fb258133fc8e4aef, type: 3}
   m_PrefabInstance: {fileID: 1006057040}
+  m_PrefabAsset: {fileID: 0}
+--- !u!223 &1418154907 stripped
+Canvas:
+  m_CorrespondingSourceObject: {fileID: 8571076842338426122, guid: 140d1d2c406167c50819d89f86d9092e, type: 3}
+  m_PrefabInstance: {fileID: 8571076842648159877}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1806680259
 GameObject:

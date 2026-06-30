@@ -11,7 +11,7 @@ public class GazeCalibration : MonoBehaviour
     public TMPro.TextMeshProUGUI statusInstructionsText;
 
     [Header("Settings")]
-    public float calibrationDuration = 5f;
+    public float calibrationDuration = 7f;
 
     private bool _isCalibrating = false;
 
@@ -50,7 +50,8 @@ public class GazeCalibration : MonoBehaviour
         _isCalibrating = false;
 
         statusInstructionsText.text = "Calibration Complete!";
-        yield return new WaitForSeconds(1f);
+        statusInstructionsText.color = Color.green;
+        yield return new WaitForSeconds(3f);
         statusInstructionsText.gameObject.SetActive(false);
 
         // Pass the bounds to the visualizer and enable it
