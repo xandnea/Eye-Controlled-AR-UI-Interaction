@@ -12,6 +12,7 @@ public class GazeVisualizer : MonoBehaviour
     public Color normalColor = Color.blue; // Swapped to blue for testing the normal
     public Color gazeColor = Color.red;
     [Range(0f, 1f)] public float headAlpha = 0.3f;
+    [Range(0f, 200f)] public float sensitivity = 100f;
 
     private Vector2 _lastGazeVector = Vector3.forward;
     private FaceLandmarkerResult _lastResult;
@@ -49,26 +50,28 @@ public class GazeVisualizer : MonoBehaviour
         // Map nose to Viewport for origin
         var landmark = landmarks[168];
 
-        // Get Symmetrical Face Normal
+        // Face normal and head rotation
         Vector3 faceNormal = GetFaceNormal(_lastResult);
+        Quaternion headRotation = Quaternion.LookRotation(faceNormal);
 
         // Canvas is "Screen Space - Camera" with a Plane Distance of 10:
         float canvasPlaneDistance = 10f;
 
         // Map nose to Viewport. 
-        Vector3 viewportPoint = new Vector3(landmark.x, 1f - landmark.y, canvasPlaneDistance*10);
+        Vector3 viewportPoint = new Vector3(landmark.x, 1f - landmark.y, canvasPlaneDistance * 10);
 
         // Convert directly to World Space.
         Vector3 origin = Camera.main.ViewportToWorldPoint(viewportPoint);
 
-        Vector3 eyeDirectionLocal = new Vector3(_lastGazeVector.x, _lastGazeVector.y, 1f).normalized;
-        Quaternion faceRotation = Quaternion.FromToRotation(Vector3.forward, faceNormal);
-        Vector3 finalGaze = faceRotation * eyeDirectionLocal;
+        Quaternion eyeOffset = Quaternion.Euler(-_lastGazeVector.y * sensitivity, _lastGazeVector.x * sensitivity, 0);
+
+        Quaternion finalRotation = headRotation * Quaternion.Slerp(Quaternion.identity, eyeOffset, 1f - headAlpha);
+        Vector3 finalGaze = finalRotation * Vector3.forward;
 
         Debug.DrawRay(origin, faceNormal * rayLength, Color.blue);
         Debug.DrawRay(origin, finalGaze * rayLength, Color.red);
     }
-
+    
     private void ProcessGaze(FaceLandmarkerResult result)
     {
         _lastResult = result;
@@ -109,16 +112,20 @@ public class GazeVisualizer : MonoBehaviour
         float leftX = MapToRange(rawLeftX, cMinLeftX, cMaxLeftX);
         float leftY = MapToRange(rawLeftY, cMinLeftY, cMaxLeftY);
 
-        // Average the processed eyes
-        float avgX = (rightX + leftX) / 2f;
-        float avgY = (rightY + leftY) / 2f;
-        Vector2 eyeGaze = new Vector2(avgX, avgY);
+        //Debug.Log($"Right Eye: ({(rightY > 0 ? "top" : "bottom")} {(rightX > 0 ? "left" : "right")}), Left Eye: ({(leftY > 0 ? "top" : "bottom")} {(leftX > 0 ? "left" : "right")})");
 
-        Vector3 faceNormal = GetFaceNormal(_lastResult);
-        Vector2 headOrientation = new Vector2(faceNormal.x, faceNormal.y);
+        // Average the processed eyes
+        float avgX = -(rightX + leftX) / 2f;
+        float avgY = -(rightY + leftY) / 2f;
+
+        return new Vector2(avgX, avgY);
+        //Vector2 eyeGaze = new Vector2(avgX, avgY);
+
+        //Vector3 faceNormal = GetFaceNormal(_lastResult);
+        //Vector2 headOrientation = new Vector2(faceNormal.x, faceNormal.y);
 
         // Final gaze returns the Lerped Vector2
-        return Vector2.Lerp(eyeGaze, headOrientation, headAlpha);
+        //return Vector2.Lerp(eyeGaze, headOrientation, headAlpha);
     }
 
     // This single method replaces GetIrisInEyeSocketRatio

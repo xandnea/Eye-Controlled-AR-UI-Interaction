@@ -152,11 +152,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   faceLandmarkerRunner: {fileID: 1064799469}
-  gazeCanvas: {fileID: 1418154907}
   rayLength: 1000000
   normalColor: {r: 0, g: 0, b: 1, a: 1}
   gazeColor: {r: 1, g: 0, b: 0, a: 1}
-  headAlpha: 0.3
+  headAlpha: 0.6
+  sensitivity: 10
 --- !u!4 &188766220
 Transform:
   m_ObjectHideFlags: 0
@@ -515,7 +515,7 @@ MonoBehaviour:
   faceLandmarkerRunner: {fileID: 1064799469}
   gazeVisualizer: {fileID: 188766219}
   statusInstructionsText: {fileID: 1216025691}
-  calibrationDuration: 5
+  calibrationDuration: 10
 --- !u!4 &1022957028
 Transform:
   m_ObjectHideFlags: 0
@@ -717,11 +717,6 @@ RectTransform:
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 3259285889726014650, guid: 5713b959e3c77a58fb258133fc8e4aef, type: 3}
   m_PrefabInstance: {fileID: 1006057040}
-  m_PrefabAsset: {fileID: 0}
---- !u!223 &1418154907 stripped
-Canvas:
-  m_CorrespondingSourceObject: {fileID: 8571076842338426122, guid: 140d1d2c406167c50819d89f86d9092e, type: 3}
-  m_PrefabInstance: {fileID: 8571076842648159877}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1806680259
 GameObject:

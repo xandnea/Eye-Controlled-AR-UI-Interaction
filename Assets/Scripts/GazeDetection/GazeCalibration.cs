@@ -11,7 +11,7 @@ public class GazeCalibration : MonoBehaviour
     public TMPro.TextMeshProUGUI statusInstructionsText;
 
     [Header("Settings")]
-    public float calibrationDuration = 7f;
+    public float calibrationDuration = 10f;
 
     private bool _isCalibrating = false;
 
