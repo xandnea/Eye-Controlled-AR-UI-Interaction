@@ -14,7 +14,13 @@ public class GazeVisualizer : MonoBehaviour
     [Range(0f, 1f)] public float headAlpha = 0.3f;
     [Range(0f, 200f)] public float sensitivity = 100f;
 
-    private Vector2 _lastGazeVector = Vector3.forward;
+    [Header("Filter Settings")]
+    [Range(1f, 20f)] public float gazeFilterSpeed = 15f;
+
+    private Vector2 _rawGazeVector = Vector2.zero;
+    private Vector2 _smoothedGazeVector = Vector2.zero;
+
+    //private Vector2 _lastGazeVector = Vector3.forward;
     private FaceLandmarkerResult _lastResult;
     private bool _hasData = false;
 
@@ -27,6 +33,12 @@ public class GazeVisualizer : MonoBehaviour
         cMinLeftX = minLX; cMaxLeftX = maxLX; cMinLeftY = minLY; cMaxLeftY = maxLY;
         cMinRightX = minRX; cMaxRightX = maxRX; cMinRightY = minRY; cMaxRightY = maxRY;
         Debug.Log($"Calibration Bounds Set:\nLeft Eye: X({cMinLeftX}, {cMaxLeftX}), Y({cMinLeftY}, {cMaxLeftY})\nRight Eye: X({cMinRightX}, {cMaxRightX}), Y({cMinRightY}, {cMaxRightY})");
+    }
+
+    // Method for extracting gaze vector for external use
+    public Vector2 GetCurrentGazeVector()
+    {
+        return _hasData ? _smoothedGazeVector : Vector2.negativeInfinity;
     }
 
     private void OnEnable()
@@ -44,6 +56,8 @@ public class GazeVisualizer : MonoBehaviour
     private void Update()
     {
         if (!_hasData || _lastResult.faceLandmarks == null || _lastResult.faceLandmarks.Count == 0) return;
+
+        _smoothedGazeVector = Vector2.Lerp(_smoothedGazeVector, _rawGazeVector, Time.deltaTime * gazeFilterSpeed);
 
         var landmarks = _lastResult.faceLandmarks[0].landmarks;
 
@@ -63,7 +77,7 @@ public class GazeVisualizer : MonoBehaviour
         // Convert directly to World Space.
         Vector3 origin = Camera.main.ViewportToWorldPoint(viewportPoint);
 
-        Quaternion eyeOffset = Quaternion.Euler(-_lastGazeVector.y * sensitivity, _lastGazeVector.x * sensitivity, 0);
+        Quaternion eyeOffset = Quaternion.Euler(-_smoothedGazeVector.y * sensitivity, _smoothedGazeVector.x * sensitivity, 0);
 
         Quaternion finalRotation = headRotation * Quaternion.Slerp(Quaternion.identity, eyeOffset, 1f - headAlpha);
         Vector3 finalGaze = finalRotation * Vector3.forward;
@@ -75,7 +89,8 @@ public class GazeVisualizer : MonoBehaviour
     private void ProcessGaze(FaceLandmarkerResult result)
     {
         _lastResult = result;
-        _lastGazeVector = CalculateGaze(result);
+
+        _rawGazeVector = CalculateGaze(result);
         _hasData = true;
     }
 
@@ -119,13 +134,6 @@ public class GazeVisualizer : MonoBehaviour
         float avgY = -(rightY + leftY) / 2f;
 
         return new Vector2(avgX, avgY);
-        //Vector2 eyeGaze = new Vector2(avgX, avgY);
-
-        //Vector3 faceNormal = GetFaceNormal(_lastResult);
-        //Vector2 headOrientation = new Vector2(faceNormal.x, faceNormal.y);
-
-        // Final gaze returns the Lerped Vector2
-        //return Vector2.Lerp(eyeGaze, headOrientation, headAlpha);
     }
 
     // This single method replaces GetIrisInEyeSocketRatio
