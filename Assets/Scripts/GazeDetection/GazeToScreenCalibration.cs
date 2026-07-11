@@ -11,6 +11,12 @@ public class GazeToScreenCalibration : MonoBehaviour
     public RectTransform cursorIndicator; // The AR cursor that moves after calibration
     public Button startCalibrationButton;
 
+    [Header("UI Controls")]
+    [Tooltip("Slider to control X Offset")]
+    public Slider offsetXSlider;
+    [Tooltip("Slider to control Y Offset")]
+    public Slider offsetYSlider;
+
     [Header("Settings")]
     [Tooltip("Padding from the absolute edge of the screen to prevent target clipping")]
     public float cornerPadding = 100f;
@@ -18,6 +24,13 @@ public class GazeToScreenCalibration : MonoBehaviour
     public float dwellTimePerTarget = 2f;
     public Color activeColor = Color.green;
     public Color inactiveColor = Color.gray;
+
+    [Header("Manual Tuning Offsets")]
+    [Tooltip("Shifts the final cursor horizontally. 0.1 = 10% to the right.")]
+    [Range(-1f, 1f)] public float offsetX = 0f;
+
+    [Tooltip("Shifts the final cursor vertically. 0.1 = 10% upwards.")]
+    [Range(-1f, 1f)] public float offsetY = 0f;
 
     // Captured biological bounds for the screen corners
     private Vector2 gazeTL, gazeTR, gazeBR, gazeBL;
@@ -28,6 +41,11 @@ public class GazeToScreenCalibration : MonoBehaviour
         startCalibrationButton.gameObject.SetActive(false);
         if (cursorIndicator != null) cursorIndicator.gameObject.SetActive(false);
         foreach (var t in cornerTargets) t.gameObject.SetActive(false);
+
+        // Sync sliders with initial inspector values
+        if (offsetXSlider != null) offsetXSlider.value = offsetX;
+        if (offsetYSlider != null) offsetYSlider.value = offsetY;
+
         PositionTargetsDynamically();
     }
 
@@ -35,12 +53,26 @@ public class GazeToScreenCalibration : MonoBehaviour
     {
         if (startCalibrationButton != null)
             startCalibrationButton.onClick.AddListener(() => StartCoroutine(CalibrationSequence()));
+
+        // Listen for slider changes
+        if (offsetXSlider != null)
+            offsetXSlider.onValueChanged.AddListener(val => offsetX = val);
+
+        if (offsetYSlider != null)
+            offsetYSlider.onValueChanged.AddListener(val => offsetY = val);
     }
 
     private void OnDisable()
     {
         if (startCalibrationButton != null)
             startCalibrationButton.onClick.RemoveAllListeners();
+
+        // Stop listening to prevent memory leaks
+        if (offsetXSlider != null)
+            offsetXSlider.onValueChanged.RemoveAllListeners();
+
+        if (offsetYSlider != null)
+            offsetYSlider.onValueChanged.RemoveAllListeners();
     }
 
     private void PositionTargetsDynamically()
@@ -59,13 +91,9 @@ public class GazeToScreenCalibration : MonoBehaviour
 
         // 0: Top Left, 1: Top Right, 2: Bottom Right, 3: Bottom Left
         cornerTargets[0].anchoredPosition = new Vector2(p, h - p);
-        Debug.Log($"Top Left Target set to: {cornerTargets[0].anchoredPosition.x}, {cornerTargets[0].anchoredPosition.y}");
         cornerTargets[1].anchoredPosition = new Vector2(w - p, h - p);
-        Debug.Log($"Top Right Target set to: {cornerTargets[1].anchoredPosition.x}, {cornerTargets[1].anchoredPosition.y}");
         cornerTargets[2].anchoredPosition = new Vector2(w - p, p);
-        Debug.Log($"Bottom Right Target set to: {cornerTargets[2].anchoredPosition.x}, {cornerTargets[2].anchoredPosition.y}");
         cornerTargets[3].anchoredPosition = new Vector2(p, p);
-        Debug.Log($"Bottom Left Target set to: {cornerTargets[3].anchoredPosition.x}, {cornerTargets[3].anchoredPosition.y}");
     }
 
     private IEnumerator CalibrationSequence()
@@ -98,7 +126,6 @@ public class GazeToScreenCalibration : MonoBehaviour
     {
         Image targetImage = cornerTargets[targetIndex].GetComponent<Image>();
         targetImage.color = activeColor;
-        Debug.Log($"Target {targetIndex} set to {activeColor}");
 
         // Give the user 1 second to snap their eyes to the new target before recording
         yield return new WaitForSeconds(1f);
@@ -147,6 +174,10 @@ public class GazeToScreenCalibration : MonoBehaviour
         float bottomY = (gazeBL.y + gazeBR.y) / 2f;
         float topY = (gazeTL.y + gazeTR.y) / 2f;
         float ty = Mathf.InverseLerp(bottomY, topY, currentGaze.y);
+
+        // Apply the manual Global Offset (acting as a percentage shift)
+        tx += offsetX;
+        ty += offsetY;
 
         // Map the normalized 0-1 values to physical screen pixels
         return new Vector2(tx * Screen.width, ty * Screen.height);
