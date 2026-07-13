@@ -19,7 +19,8 @@ public class GazeToScreenCalibration : MonoBehaviour
 
     [Header("Settings")]
     [Tooltip("Padding from the absolute edge of the screen to prevent target clipping")]
-    public float cornerPadding = 100f;
+    public float cornerXPadding = 50f;
+    public float cornerYPadding = 50f;
     [Range(0.5f, 5f)]
     public float dwellTimePerTarget = 2f;
     public Color activeColor = Color.green;
@@ -36,9 +37,12 @@ public class GazeToScreenCalibration : MonoBehaviour
     private Vector2 gazeTL, gazeTR, gazeBR, gazeBL;
     private bool isCalibrated = false;
 
+    // Tracks the active sequence so it can be interrupted
+    private Coroutine _activeCalibrationRoutine;
+
     private void Start()
     {
-        startCalibrationButton.gameObject.SetActive(false);
+        startCalibrationButton.gameObject.SetActive(true);
         if (cursorIndicator != null) cursorIndicator.gameObject.SetActive(false);
         foreach (var t in cornerTargets) t.gameObject.SetActive(false);
 
@@ -52,7 +56,7 @@ public class GazeToScreenCalibration : MonoBehaviour
     private void OnEnable()
     {
         if (startCalibrationButton != null)
-            startCalibrationButton.onClick.AddListener(() => StartCoroutine(CalibrationSequence()));
+            startCalibrationButton.onClick.AddListener(StartCalibration);
 
         // Listen for slider changes
         if (offsetXSlider != null)
@@ -73,13 +77,21 @@ public class GazeToScreenCalibration : MonoBehaviour
 
         if (offsetYSlider != null)
             offsetYSlider.onValueChanged.RemoveAllListeners();
+
+        // Safety cleanup if script is disabled mid-calibration
+        if (_activeCalibrationRoutine != null)
+        {
+            StopCoroutine(_activeCalibrationRoutine);
+            _activeCalibrationRoutine = null;
+        }
     }
 
     private void PositionTargetsDynamically()
     {
         float w = Screen.width;
         float h = Screen.height;
-        float p = cornerPadding;
+        float px = cornerXPadding;
+        float py = cornerYPadding;
 
         // Force anchors to Bottom-Left (0,0) so pixel coordinates map cleanly
         foreach (var target in cornerTargets)
@@ -90,17 +102,44 @@ public class GazeToScreenCalibration : MonoBehaviour
         }
 
         // 0: Top Left, 1: Top Right, 2: Bottom Right, 3: Bottom Left
-        cornerTargets[0].anchoredPosition = new Vector2(p, h - p);
-        cornerTargets[1].anchoredPosition = new Vector2(w - p, h - p);
-        cornerTargets[2].anchoredPosition = new Vector2(w - p, p);
-        cornerTargets[3].anchoredPosition = new Vector2(p, p);
+        cornerTargets[0].anchoredPosition = new Vector2(px, h - py);
+        cornerTargets[1].anchoredPosition = new Vector2(w - px, h - py);
+        cornerTargets[2].anchoredPosition = new Vector2(w - px, py);
+        cornerTargets[3].anchoredPosition = new Vector2(px, py);
     }
 
+    public void StartCalibration()
+    {
+        if (_activeCalibrationRoutine != null)
+        {
+            StopCoroutine(_activeCalibrationRoutine);
+            _activeCalibrationRoutine = null;
+            ResetTargets();
+            Debug.Log("Previous calibration stopped. Restarting...");
+        }
+
+        _activeCalibrationRoutine = StartCoroutine(CalibrationSequence());
+    }
+
+    private void ResetTargets()
+    {
+        foreach (var t in cornerTargets)
+        {
+            t.GetComponent<Image>().color = inactiveColor;
+            t.gameObject.SetActive(false);
+        }
+
+        // hide the cursor
+        if (cursorIndicator != null) cursorIndicator.gameObject.SetActive(false);
+
+        isCalibrated = false;
+    
+    }
     private IEnumerator CalibrationSequence()
     {
         Debug.Log("Beginning Gaze-to-Screen Calibration Sequence...");
 
-        // 1. Turn all targets ON and reset to inactive color
+        // Turn all targets ON and reset to inactive color
         foreach (var t in cornerTargets)
         {
             t.gameObject.SetActive(true);
@@ -120,6 +159,9 @@ public class GazeToScreenCalibration : MonoBehaviour
         // Hide targets and show cursor
         foreach (var t in cornerTargets) t.gameObject.SetActive(false);
         if (cursorIndicator != null) cursorIndicator.gameObject.SetActive(true);
+
+        // Sequence is completely finished, clear the tracker
+        _activeCalibrationRoutine = null;
     }
 
     private IEnumerator CollectCornerData(int targetIndex, System.Action<Vector2> onCornerCalibrated)
@@ -151,7 +193,6 @@ public class GazeToScreenCalibration : MonoBehaviour
     {
         if (!isCalibrated || cursorIndicator == null)
         {
-            startCalibrationButton.gameObject.SetActive(true);
             return;
         }
 
@@ -165,21 +206,19 @@ public class GazeToScreenCalibration : MonoBehaviour
     {
         if (!isCalibrated) return Vector2.zero;
 
-        // Average the X boundaries from the left and right sides
+        // Keep the biological boundaries pure
         float leftX = (gazeTL.x + gazeBL.x) / 2f;
         float rightX = (gazeTR.x + gazeBR.x) / 2f;
         float tx = Mathf.InverseLerp(leftX, rightX, currentGaze.x);
 
-        // Average the Y boundaries from the top and bottom sides
         float bottomY = (gazeBL.y + gazeBR.y) / 2f;
         float topY = (gazeTL.y + gazeTR.y) / 2f;
         float ty = Mathf.InverseLerp(bottomY, topY, currentGaze.y);
 
-        // Apply the manual Global Offset (acting as a percentage shift)
-        tx += offsetX;
-        ty += offsetY;
+        // Apply the manual offset directly to the physical screen pixels
+        float finalPixelX = (tx * Screen.width) + (offsetX * Screen.width);
+        float finalPixelY = (ty * Screen.height) + (offsetY * Screen.height);
 
-        // Map the normalized 0-1 values to physical screen pixels
-        return new Vector2(tx * Screen.width, ty * Screen.height);
+        return new Vector2(finalPixelX, finalPixelY);
     }
 }
