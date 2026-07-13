@@ -9,6 +9,8 @@ using Mediapipe.Tasks.Vision.FaceLandmarker;
 using UnityEngine;
 using UnityEngine.Rendering;
 
+
+
 namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 {
   public class FaceLandmarkerRunner : VisionTaskApiRunner<FaceLandmarker>
@@ -153,9 +155,12 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
       }
     }
 
+    public event System.Action<FaceLandmarkerResult> OnFaceLandmarksDetected;
+
     private void OnFaceLandmarkDetectionOutput(FaceLandmarkerResult result, Image image, long timestamp)
     {
       _faceLandmarkerResultAnnotationController.DrawLater(result);
+      OnFaceLandmarksDetected?.Invoke(result);
     }
   }
 }
