@@ -2035,7 +2035,8 @@ MonoBehaviour:
   startCalibrationButton: {fileID: 825776523}
   offsetXSlider: {fileID: 1224002969}
   offsetYSlider: {fileID: 682128720}
-  cornerPadding: 125
+  cornerXPadding: 50
+  cornerYPadding: 50
   dwellTimePerTarget: 2.5
   activeColor: {r: 0, g: 1, b: 0, a: 1}
   inactiveColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
