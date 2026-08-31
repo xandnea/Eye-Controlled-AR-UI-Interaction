@@ -12,13 +12,22 @@ using System.Threading;
 using System.Collections;
 
 [RequireComponent(typeof(VirtualTextureSource))]
-public class Yolo11SegSample : MonoBehaviour
+public class Yolo11SegRunner : MonoBehaviour
 {
     [Serializable]
     public class TextureEvent : UnityEvent<Texture> { }
+
     [Serializable]
     public class AspectChangeEvent : UnityEvent<float> { }
 
+    [Header("AR Settings")]
+    [SerializeField]
+    private DepthSampler depthSampler;
+
+    [SerializeField]
+    private DetectionAnchorManager detectionAnchorManager;
+
+    [Header("Detection Model")]
     [SerializeField]
     private OrtAsset model;
 
@@ -124,6 +133,20 @@ public class Yolo11SegSample : MonoBehaviour
         latestTexture = texture;
     }
 
+    private Vector2 MaskCenterToViewport(Vector2 maskCenter)
+    {
+        // YOLO/image coordinates use top-left origin.
+        // Unity viewport uses bottom-left origin.
+
+        Vector2 unityPoint = new Vector2(
+            maskCenter.x,
+            1f - maskCenter.y
+        );
+
+        return inference.InputToViewportMatrix
+            .MultiplyPoint3x4(unityPoint);
+    }
+
     public void Scan()
     {
         if (inference == null)
@@ -139,11 +162,19 @@ public class Yolo11SegSample : MonoBehaviour
         }
 
         Debug.Log("========== SCAN PRESSED ==========");
-        Debug.Log($"Running YOLO on texture: {latestTexture.width}x{latestTexture.height}");
+
+        detectionAnchorManager.ClearAnchors();
+
+        Debug.Log(
+            $"Running YOLO on texture: " +
+            $"{latestTexture.width}x{latestTexture.height}"
+        );
 
         Run(latestTexture);
 
-        Debug.Log($"SCAN COMPLETE - Detections: {inference.Detections.Length}");
+        Debug.Log(
+            $"SCAN COMPLETE - Detections: {inference.Detections.Length}"
+        );
     }
 
     private void Run(Texture texture)
@@ -156,6 +187,8 @@ public class Yolo11SegSample : MonoBehaviour
         Debug.Log($"SEG TEXTURE: {segTex.width}x{segTex.height} format={segTex.graphicsFormat} dimension={segTex.dimension}");
 
         InspectSegmentationTexture(segTex);
+
+        DetectDepth(inference.Detections);
 
         if (prevSegmentationTexture != segTex)
         {
@@ -269,5 +302,67 @@ public class Yolo11SegSample : MonoBehaviour
 
             Debug.Log($"SEG GPU DATA: pixels={data.Length}, nonTransparent={nonTransparent}, nonBlack={nonBlack}, R={minR}-{maxR}, G={minG}-{maxG}, B={minB}-{maxB}, A={minA}-{maxA}");
         });
+    }
+
+    private void DetectDepth(
+    ReadOnlySpan<Yolo11Seg.Detection> detections)
+    {
+        var labels = inference.labelNames;
+
+        Debug.Log("========== DETECTION DEPTH ==========");
+
+        for (int i = 0; i < detections.Length; i++)
+        {
+            var detection = detections[i];
+
+            if (!detection.hasMaskCenter)
+            {
+                Debug.Log(
+                    $"DEPTH [{i}] " +
+                    $"{labels[detection.label]} " +
+                    "NO MASK CENTER"
+                );
+
+                continue;
+            }
+
+            Vector2 maskCenter = detection.maskCenter;
+
+            Vector2 viewport = MaskCenterToViewport(maskCenter);
+
+            bool gotDepth = depthSampler.TryGetDepth(
+                viewport,
+                out float depth,
+                out Vector3 worldPosition
+            );
+
+            if (!gotDepth)
+            {
+                Debug.Log(
+                    $"DEPTH [{i}] " +
+                    $"class={labels[detection.label]} " +
+                    $"confidence={detection.probability:F3} " +
+                    $"maskCenter={maskCenter} " +
+                    $"viewport={viewport} " +
+                    "NO DEPTH HIT"
+                );
+
+                continue;
+            }
+
+            Debug.Log(
+                $"DEPTH [{i}] " +
+                $"class={labels[detection.label]} " +
+                $"confidence={detection.probability:F3} " +
+                $"maskCenter={maskCenter} " +
+                $"viewport={viewport} " +
+                $"depth={depth:F3}m " +
+                $"world={worldPosition}"
+            );
+
+            detectionAnchorManager.CreateAnchor(viewport, depth, worldPosition, i, labels[detection.label]);
+        }
+
+        Debug.Log("====================================");
     }
 }

@@ -945,7 +945,7 @@ GameObject:
   - component: {fileID: 1926674702}
   - component: {fileID: 1926674703}
   m_Layer: 0
-  m_Name: Yolo11SegSample
+  m_Name: Yolo11SegRunner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
