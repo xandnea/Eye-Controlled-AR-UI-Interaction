@@ -922,7 +922,13 @@ PlayerSettings:
   XboxOneOverrideIdentityName: 
   XboxOneOverrideIdentityPublisher: 
   vrEditorSettings: {}
-  cloudServicesEnabled: {}
+  cloudServicesEnabled:
+    Build: 0
+    Game Performance: 0
+    Legacy Analytics: 0
+    Purchasing: 0
+    UDP: 0
+    Unity Ads: 0
   luminIcon:
     m_Name: 
     m_ModelFolderPath: 
@@ -944,10 +950,10 @@ PlayerSettings:
   captureStartupLogs: {}
   activeInputHandler: 1
   windowsGamepadBackendHint: 0
-  cloudProjectId: 384aa09e-078c-4158-befe-1f77c0761f16
+  cloudProjectId: fbc85183-2a00-42ed-8ed7-89fa8e0e2dd2
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: ECARUII using OnnxRuntime
+  projectName: Eye Controlled AR UI Interaction
   organizationId: xandnea
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0

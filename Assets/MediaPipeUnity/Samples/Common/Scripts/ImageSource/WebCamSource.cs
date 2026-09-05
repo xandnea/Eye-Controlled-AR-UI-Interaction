@@ -18,9 +18,9 @@ namespace Mediapipe.Unity
 {
   public class WebCamSource : ImageSource
   {
-    private readonly int _preferableDefaultWidth = 1280;
+        private readonly int _preferableDefaultWidth = 640; //1280; was 720p, now 480p for better performance on mobile devices
 
-    private const string _TAG = nameof(WebCamSource);
+        private const string _TAG = nameof(WebCamSource);
 
     private readonly ResolutionStruct[] _defaultAvailableResolutions;
 
@@ -132,7 +132,19 @@ namespace Mediapipe.Unity
 
       if (availableSources != null && availableSources.Length > 0)
       {
-        webCamDevice = availableSources[0];
+        WebCamDevice selectedDevice = availableSources[0]; // Fallback to first device
+
+        // Loop through all devices to find the front-facing one
+        for (int i = 0; i < availableSources.Length; i++)
+        {
+          if (availableSources[i].isFrontFacing)
+          {
+            selectedDevice = availableSources[i];
+            break; 
+          }
+        }
+
+        webCamDevice = selectedDevice;
       }
     }
 

@@ -11,9 +11,12 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/Yolo11Seg Scan Demo.unity
     guid: ef06c2a9183fccc4da3f277fa015d2f9
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Yolo11Seg AR Scan Demo.unity
     guid: 412768936b5ea7a4eb78b728c83fa88f
+  - enabled: 1
+    path: Assets/Scenes/Eye Gaze Cursor Demo.unity
+    guid: 166bea06e3ba82140984a7f48c236ae5
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: 6ee72d15cf39dd748a13eac57397b9af, type: 2}
     UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: 0465d33c6aee55f44b0237db8b0e0259, type: 2}

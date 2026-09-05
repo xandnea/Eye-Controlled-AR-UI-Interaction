@@ -3,7 +3,7 @@ using Mediapipe.Tasks.Vision.FaceLandmarker;
 using Mediapipe.Unity.Sample.FaceLandmarkDetection;
 using UnityEngine;
 
-public class GazeCalibration : MonoBehaviour
+public class LocalGazeCalibrator : MonoBehaviour
 {
     [Header("References")]
     public FaceLandmarkerRunner faceLandmarkerRunner;
@@ -25,7 +25,6 @@ public class GazeCalibration : MonoBehaviour
     {
         // Ensure Visualizer is off until calibration completes
         gazeVisualizer.enabled = false;
-        StartCoroutine(CalibrationRoutine());
     }
 
     private void OnEnable()
@@ -38,6 +37,11 @@ public class GazeCalibration : MonoBehaviour
     {
         if (faceLandmarkerRunner != null)
             faceLandmarkerRunner.OnFaceLandmarksDetected -= ProcessCalibrationData;
+    }
+
+    public void RunLocalGazeCalibration()
+    {
+        StartCoroutine(CalibrationRoutine());
     }
 
     private IEnumerator CalibrationRoutine()

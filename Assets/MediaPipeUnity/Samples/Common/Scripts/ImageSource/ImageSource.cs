@@ -42,8 +42,8 @@ namespace Mediapipe.Unity
       public override string ToString()
       {
         var aspectRatio = $"{width}x{height}";
-        var frameRateStr = frameRate.ToString("#.##");
-        return frameRate > 0 ? $"{aspectRatio} ({frameRateStr}Hz)" : aspectRatio;
+        var frameRateStr = frameRate.ToString();
+        return $"{aspectRatio} ({frameRateStr}Hz)";
       }
     }
 

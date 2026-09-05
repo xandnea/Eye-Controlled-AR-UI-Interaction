@@ -304,8 +304,7 @@ public class Yolo11SegRunner : MonoBehaviour
         });
     }
 
-    private void DetectDepth(
-    ReadOnlySpan<Yolo11Seg.Detection> detections)
+    private void DetectDepth(ReadOnlySpan<Yolo11Seg.Detection> detections)
     {
         var labels = inference.labelNames;
 

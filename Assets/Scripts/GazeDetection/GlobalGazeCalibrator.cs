@@ -2,20 +2,13 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class GazeToScreenCalibration : MonoBehaviour
+public class GlobalGazeCalibrator : MonoBehaviour
 {
     [Header("References")]
     public GazeVisualizer gazeVisualizer;
     [Tooltip("Assign 4 UI Images in this order: TopLeft, TopRight, BottomRight, BottomLeft")]
     public RectTransform[] cornerTargets;
     public RectTransform cursorIndicator; // The AR cursor that moves after calibration
-    public Button startCalibrationButton;
-
-    [Header("UI Controls")]
-    [Tooltip("Slider to control X Offset")]
-    public Slider offsetXSlider;
-    [Tooltip("Slider to control Y Offset")]
-    public Slider offsetYSlider;
 
     [Header("Settings")]
     [Tooltip("Padding from the absolute edge of the screen to prevent target clipping")]
@@ -26,13 +19,6 @@ public class GazeToScreenCalibration : MonoBehaviour
     public Color activeColor = Color.green;
     public Color inactiveColor = Color.gray;
 
-    [Header("Manual Tuning Offsets")]
-    [Tooltip("Shifts the final cursor horizontally. 0.1 = 10% to the right.")]
-    [Range(-1f, 1f)] public float offsetX = 0f;
-
-    [Tooltip("Shifts the final cursor vertically. 0.1 = 10% upwards.")]
-    [Range(-1f, 1f)] public float offsetY = 0f;
-
     // Captured biological bounds for the screen corners
     private Vector2 gazeTL, gazeTR, gazeBR, gazeBL;
     private bool isCalibrated = false;
@@ -42,42 +28,17 @@ public class GazeToScreenCalibration : MonoBehaviour
 
     private void Start()
     {
-        startCalibrationButton.gameObject.SetActive(true);
         if (cursorIndicator != null) cursorIndicator.gameObject.SetActive(false);
         foreach (var t in cornerTargets) t.gameObject.SetActive(false);
-
-        // Sync sliders with initial inspector values
-        if (offsetXSlider != null) offsetXSlider.value = offsetX;
-        if (offsetYSlider != null) offsetYSlider.value = offsetY;
-
-        PositionTargetsDynamically();
     }
 
     private void OnEnable()
     {
-        if (startCalibrationButton != null)
-            startCalibrationButton.onClick.AddListener(StartCalibration);
 
-        // Listen for slider changes
-        if (offsetXSlider != null)
-            offsetXSlider.onValueChanged.AddListener(val => offsetX = val);
-
-        if (offsetYSlider != null)
-            offsetYSlider.onValueChanged.AddListener(val => offsetY = val);
     }
 
     private void OnDisable()
     {
-        if (startCalibrationButton != null)
-            startCalibrationButton.onClick.RemoveAllListeners();
-
-        // Stop listening to prevent memory leaks
-        if (offsetXSlider != null)
-            offsetXSlider.onValueChanged.RemoveAllListeners();
-
-        if (offsetYSlider != null)
-            offsetYSlider.onValueChanged.RemoveAllListeners();
-
         // Safety cleanup if script is disabled mid-calibration
         if (_activeCalibrationRoutine != null)
         {
@@ -86,29 +47,7 @@ public class GazeToScreenCalibration : MonoBehaviour
         }
     }
 
-    private void PositionTargetsDynamically()
-    {
-        float w = Screen.width;
-        float h = Screen.height;
-        float px = cornerXPadding;
-        float py = cornerYPadding;
-
-        // Force anchors to Bottom-Left (0,0) so pixel coordinates map cleanly
-        foreach (var target in cornerTargets)
-        {
-            target.anchorMin = Vector2.zero;
-            target.anchorMax = Vector2.zero;
-            target.pivot = new Vector2(0.5f, 0.5f);
-        }
-
-        // 0: Top Left, 1: Top Right, 2: Bottom Right, 3: Bottom Left
-        cornerTargets[0].anchoredPosition = new Vector2(px, h - py);
-        cornerTargets[1].anchoredPosition = new Vector2(w - px, h - py);
-        cornerTargets[2].anchoredPosition = new Vector2(w - px, py);
-        cornerTargets[3].anchoredPosition = new Vector2(px, py);
-    }
-
-    public void StartCalibration()
+    public void RunGlobalGazeCalibration()
     {
         if (_activeCalibrationRoutine != null)
         {
@@ -133,8 +72,8 @@ public class GazeToScreenCalibration : MonoBehaviour
         if (cursorIndicator != null) cursorIndicator.gameObject.SetActive(false);
 
         isCalibrated = false;
-    
     }
+
     private IEnumerator CalibrationSequence()
     {
         Debug.Log("Beginning Gaze-to-Screen Calibration Sequence...");
@@ -204,7 +143,7 @@ public class GazeToScreenCalibration : MonoBehaviour
     // The core math: Bilinear Interpolation
     public Vector2 GetScreenPixel(Vector2 currentGaze)
     {
-        if (!isCalibrated) return Vector2.zero;
+        if (!isCalibrated || cursorIndicator == null) return Vector2.zero;
 
         // Keep the biological boundaries pure
         float leftX = (gazeTL.x + gazeBL.x) / 2f;
@@ -215,9 +154,25 @@ public class GazeToScreenCalibration : MonoBehaviour
         float topY = (gazeTL.y + gazeTR.y) / 2f;
         float ty = Mathf.InverseLerp(bottomY, topY, currentGaze.y);
 
-        // Apply the manual offset directly to the physical screen pixels
-        float finalPixelX = (tx * Screen.width) + (offsetX * Screen.width);
-        float finalPixelY = (ty * Screen.height) + (offsetY * Screen.height);
+        tx = Mathf.Clamp01(tx);
+        ty = Mathf.Clamp01(ty);
+
+        // Get the parent canvas dimensions so it respects the Canvas Scaler resolution
+        RectTransform canvasRect = cursorIndicator.GetComponentInParent<Canvas>().GetComponent<RectTransform>();
+        float canvasWidth = canvasRect.rect.width;
+        float canvasHeight = canvasRect.rect.height;
+
+        // Map to canvas coordinate space
+        float rawPixelX = tx * canvasWidth;
+        float rawPixelY = ty * canvasHeight;
+
+        // Account for the cursor's size and center pivot (0.5, 0.5) 
+        Vector2 cursorSize = cursorIndicator.rect.size;
+        float halfWidth = cursorSize.x * 0.5f;
+        float halfHeight = cursorSize.y * 0.5f;
+
+        float finalPixelX = Mathf.Clamp(rawPixelX, halfWidth, canvasWidth - halfWidth);
+        float finalPixelY = Mathf.Clamp(rawPixelY, halfHeight, canvasHeight - halfHeight);
 
         return new Vector2(finalPixelX, finalPixelY);
     }
