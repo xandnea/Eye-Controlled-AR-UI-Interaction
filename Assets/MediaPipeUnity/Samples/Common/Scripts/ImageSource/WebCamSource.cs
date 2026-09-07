@@ -18,7 +18,7 @@ namespace Mediapipe.Unity
 {
   public class WebCamSource : ImageSource
   {
-        private readonly int _preferableDefaultWidth = 640; //1280; was 720p, now 480p for better performance on mobile devices
+        private readonly int _preferableDefaultWidth = 1280; //1280; was 720p, now 480p for better performance on mobile devices
 
         private const string _TAG = nameof(WebCamSource);
 
@@ -114,7 +114,44 @@ namespace Mediapipe.Unity
     public override bool isPrepared => webCamTexture != null;
     public override bool isPlaying => webCamTexture != null && webCamTexture.isPlaying;
 
-    private IEnumerator Initialize()
+        private void LogCameraInformation()
+        {
+            Debug.Log("========== WEBCAM INFORMATION ==========");
+
+            if (webCamDevice is WebCamDevice device)
+            {
+                Debug.Log($"Selected camera: {device.name}");
+                Debug.Log($"Is front facing: {device.isFrontFacing}");
+            }
+
+            Debug.Log($"Preferred default width: {_preferableDefaultWidth}");
+
+            if (availableResolutions == null)
+            {
+                Debug.Log("Available resolutions: NULL");
+                Debug.Log("========================================");
+                return;
+            }
+
+            Debug.Log($"Available resolutions: {availableResolutions.Length}");
+
+            for (int i = 0; i < availableResolutions.Length; i++)
+            {
+                var r = availableResolutions[i];
+
+                Debug.Log(
+                    $"Camera Resolution [{i}]: " +
+                    $"{r.width}x{r.height} @ {r.frameRate:F1} FPS");
+            }
+
+            Debug.Log(
+                $"SELECTED REQUEST: " +
+                $"{resolution.width}x{resolution.height} @ {resolution.frameRate:F1} FPS");
+
+            Debug.Log("========================================");
+        }
+
+        private IEnumerator Initialize()
     {
       yield return GetPermission();
 
@@ -148,7 +185,7 @@ namespace Mediapipe.Unity
       }
     }
 
-    private IEnumerator GetPermission()
+        private IEnumerator GetPermission()
     {
       lock (_PermissionLock)
       {
@@ -251,6 +288,9 @@ namespace Mediapipe.Unity
     private void InitializeWebCamTexture()
     {
       Stop();
+
+      LogCameraInformation();
+
       if (webCamDevice is WebCamDevice valueOfWebCamDevice)
       {
         webCamTexture = new WebCamTexture(valueOfWebCamDevice.name, resolution.width, resolution.height, (int)resolution.frameRate);
@@ -270,6 +310,15 @@ namespace Mediapipe.Unity
       {
         throw new TimeoutException("Failed to start WebCam");
       }
+
+            Debug.Log("========== ACTUAL WEBCAM STARTED ==========");
+            Debug.Log($"Actual texture width: {webCamTexture.width}");
+            Debug.Log($"Actual texture height: {webCamTexture.height}");
+            Debug.Log($"Video rotation: {webCamTexture.videoRotationAngle}");
+            Debug.Log($"Video vertically mirrored: {webCamTexture.videoVerticallyMirrored}");
+            Debug.Log($"Requested resolution: {resolution.width}x{resolution.height}");
+            Debug.Log($"Requested FPS: {resolution.frameRate:F1}");
+            Debug.Log("============================================");
     }
 
     private class ResolutionStructComparer : IComparer<ResolutionStruct>

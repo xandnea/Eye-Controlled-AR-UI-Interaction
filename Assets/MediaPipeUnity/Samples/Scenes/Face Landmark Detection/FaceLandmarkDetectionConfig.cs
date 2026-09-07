@@ -17,7 +17,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
     Tasks.Core.BaseOptions.Delegate.GPU;
 #endif
 
-    public ImageReadMode ImageReadMode { get; set; } = ImageReadMode.CPUAsync;
+        public ImageReadMode ImageReadMode { get; set; } = ImageReadMode.GPU; //.GPU;
 
     public Tasks.Vision.Core.RunningMode RunningMode { get; set; } = Tasks.Vision.Core.RunningMode.LIVE_STREAM;
 
@@ -25,8 +25,8 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
     public float MinFaceDetectionConfidence { get; set; } = 0.5f;
     public float MinFacePresenceConfidence { get; set; } = 0.5f;
     public float MinTrackingConfidence { get; set; } = 0.5f;
-    public bool OutputFaceBlendshapes { get; set; } = true;
-    public bool OutputFacialTransformationMatrixes { get; set; } = true;
+    public bool OutputFaceBlendshapes { get; set; } = false; //true;
+    public bool OutputFacialTransformationMatrixes { get; set; } = false; //true;
     public string ModelPath => OutputFaceBlendshapes ? "face_landmarker_v2_with_blendshapes.bytes" : "face_landmarker_v2.bytes";
 
     public FaceLandmarkerOptions GetFaceLandmarkerOptions(FaceLandmarkerOptions.ResultCallback resultCallback = null)

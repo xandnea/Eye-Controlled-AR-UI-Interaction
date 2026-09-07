@@ -34,7 +34,7 @@ namespace Mediapipe.Unity.Sample
     [Header("WebCam Source")]
     [Tooltip("For the default resolution, the one whose width is closest to this value will be chosen")]
 
-    [SerializeField] private int _preferredDefaultWebCamWidth = 1280;
+    [SerializeField] private int _preferredDefaultWebCamWidth = 1280; // 1280
     [SerializeField] private ImageSource.ResolutionStruct[] _defaultAvailableWebCamResolutions = new ImageSource.ResolutionStruct[] {
       new ImageSource.ResolutionStruct(176, 144, 30),
       new ImageSource.ResolutionStruct(320, 240, 30),
