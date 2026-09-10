@@ -7,20 +7,32 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 #if UNITY_ANDROID
 using UnityEngine.Android;
+using Debug = UnityEngine.Debug;
 #endif
 
 namespace Mediapipe.Unity
 {
   public class WebCamSource : ImageSource
   {
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    [DllImport("VulkanBridge")]
+    private static extern void SetUnityTexture(IntPtr nativeTexture);
+
+    [DllImport("VulkanBridge")]
+    private static extern IntPtr GetRenderEventFunc();
+#endif
+
         private readonly int _preferableDefaultWidth = 1280; //1280; was 720p, now 480p for better performance on mobile devices
 
-        private const string _TAG = nameof(WebCamSource);
+    private const string _TAG = nameof(WebCamSource);
 
     private readonly ResolutionStruct[] _defaultAvailableResolutions;
 
@@ -279,7 +291,39 @@ namespace Mediapipe.Unity
 
     public override Texture GetCurrentTexture() => webCamTexture;
 
-    private ResolutionStruct GetDefaultResolution()
+        private void InspectCurrentWebCamTexture()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+    if (webCamTexture == null)
+    {
+        Debug.LogWarning("[VulkanBridge] Cannot inspect camera texture: WebCamTexture is null.");
+        return;
+    }
+
+    IntPtr nativeTexture = webCamTexture.GetNativeTexturePtr();
+
+    Debug.Log("========== UNITY WEBCAM VULKAN TEXTURE ==========");
+    Debug.Log($"WebCamTexture: {webCamTexture}");
+    Debug.Log($"Managed size: {webCamTexture.width}x{webCamTexture.height}");
+    Debug.Log($"Native texture pointer: 0x{nativeTexture.ToInt64():X}");
+    Debug.Log($"Graphics API: {SystemInfo.graphicsDeviceType}");
+    Debug.Log("==================================================");
+
+    if (nativeTexture == IntPtr.Zero)
+    {
+        Debug.LogError("[VulkanBridge] GetNativeTexturePtr() returned NULL.");
+        return;
+    }
+
+    SetUnityTexture(nativeTexture);
+
+    GL.IssuePluginEvent(GetRenderEventFunc(), 10);
+#else
+            Debug.Log("[VulkanBridge] Unity texture inspection is Android/Vulkan only.");
+#endif
+        }
+
+        private ResolutionStruct GetDefaultResolution()
     {
       var resolutions = availableResolutions;
       return resolutions == null || resolutions.Length == 0 ? new ResolutionStruct() : resolutions.OrderBy(resolution => resolution, new ResolutionStructComparer(_preferableDefaultWidth)).First();
@@ -319,7 +363,32 @@ namespace Mediapipe.Unity
             Debug.Log($"Requested resolution: {resolution.width}x{resolution.height}");
             Debug.Log($"Requested FPS: {resolution.frameRate:F1}");
             Debug.Log("============================================");
-    }
+
+            Debug.Log("[VulkanBridge] Waiting for first real WebCamTexture frame...");
+
+            int updateWaitFrames = 0;
+
+            while (!webCamTexture.didUpdateThisFrame &&
+                   updateWaitFrames < 120)
+            {
+                updateWaitFrames++;
+                yield return null;
+            }
+
+            if (!webCamTexture.didUpdateThisFrame)
+            {
+                Debug.LogWarning(
+                    "[VulkanBridge] Timed out waiting for didUpdateThisFrame; " +
+                    "continuing diagnostic anyway.");
+            }
+            else
+            {
+                Debug.Log(
+                    "[VulkanBridge] Real camera frame received.");
+            }
+
+            InspectCurrentWebCamTexture();
+        }
 
     private class ResolutionStructComparer : IComparer<ResolutionStruct>
     {

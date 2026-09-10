@@ -1,340 +1,234 @@
-// Copyright (c) 2023 homuler
+﻿// Copyright (c) 2023 homuler
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-using Mediapipe.Tasks.Vision.FaceLandmarker;
+using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Threading;
+using Mediapipe;
+using Mediapipe.Tasks.Vision.FaceLandmarker;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 using Debug = UnityEngine.Debug;
-
-
 
 namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 {
     public class FaceLandmarkerRunner : VisionTaskApiRunner<FaceLandmarker>
     {
         [SerializeField] private FaceLandmarkerResultAnnotationController _faceLandmarkerResultAnnotationController;
-        [SerializeField] private int framePoolSize = 2;
+        [SerializeField, FormerlySerializedAs("vulkanBridgeTest")] private VulkanMediaPipeBridgeManager vulkanBridge;
+        [SerializeField, Min(1)] private int performanceLogInterval = 30;
 
-        // ============================================================
-        // PERFORMANCE DEBUGGING
-        // ============================================================
+        private int inferenceCallbackReceived;
+        private int lastFaceCount;
 
-        private Stopwatch _performanceStopwatch;
-
-        private long _lastReadbackStartMs = -1;
-        private long _lastReadbackEndMs = -1;
-        private long _lastDispatchMs = -1;
-        private long _lastCallbackMs = -1;
-
-        private long _lastCallbackTimestamp = -1;
-
-        private int _frameCount;
-        private int _callbackCount;
-
-        private long _totalReadbackMs;
-        private long _totalCallbackIntervalMs;
-        private long _totalDispatchIntervalMs;
-
-        private long _lastDispatchTimestamp = -1;
-
-        // ============================================================
-
-        private Experimental.TextureFramePool _textureFramePool;
+        private double cycleTotalMs;
+        private double inferenceTotalMs;
+        private double bridgeReadyTotalMs;
+        private double bridgeTailTotalMs;
+        private double releaseTotalMs;
+        private int performanceSamples;
 
         public readonly FaceLandmarkDetectionConfig config = new FaceLandmarkDetectionConfig();
-
-        public override void Stop()
-        {
-            base.Stop();
-            _textureFramePool?.Dispose();
-            _textureFramePool = null;
-        }
+        public event Action<FaceLandmarkerResult> OnFaceLandmarksDetected;
 
         protected override IEnumerator Run()
         {
-            _performanceStopwatch = Stopwatch.StartNew();
-
             yield return AssetLoader.PrepareAssetAsync(config.ModelPath);
 
-            var options = config.GetFaceLandmarkerOptions(config.RunningMode == Tasks.Vision.Core.RunningMode.LIVE_STREAM ? OnFaceLandmarkDetectionOutput : null);
+            var options = config.GetFaceLandmarkerOptions(
+                config.RunningMode == Tasks.Vision.Core.RunningMode.LIVE_STREAM
+                    ? OnFaceLandmarkDetectionOutput
+                    : null);
+
             taskApi = FaceLandmarker.CreateFromOptions(options, GpuManager.GpuResources);
             var imageSource = ImageSourceProvider.ImageSource;
 
             yield return imageSource.Play();
-
             if (!imageSource.isPrepared)
             {
-                Debug.LogError("Failed to start ImageSource, exiting...");
+                Debug.LogError("[FaceLandmarker] Failed to start the image source.");
                 yield break;
             }
 
-            Debug.Log("========== FACE CAMERA CONFIG ==========");
-            Debug.Log($"ImageSource: {imageSource.GetType().Name}");
-            Debug.Log($"Texture width: {imageSource.textureWidth}");
-            Debug.Log($"Texture height: {imageSource.textureHeight}");
-            Debug.Log($"Source name: {imageSource.sourceName}");
-            Debug.Log($"Front facing: {imageSource.isFrontFacing}");
-            Debug.Log($"Rotation: {imageSource.rotation}");
-            Debug.Log($"Vertically flipped: {imageSource.isVerticallyFlipped}");
-            Debug.Log($"Graphics API: {SystemInfo.graphicsDeviceType}");
-            Debug.Log($"Device: {SystemInfo.deviceModel}");
-            Debug.Log($"CPU: {SystemInfo.processorType}");
-            Debug.Log($"GPU: {SystemInfo.graphicsDeviceName}");
-            Debug.Log($"System memory: {SystemInfo.systemMemorySize} MB");
-            Debug.Log($"Graphics memory: {SystemInfo.graphicsMemorySize} MB");
-            Debug.Log("=========================================");
+            if (config.ImageReadMode != ImageReadMode.GPU ||
+                SystemInfo.graphicsDeviceType != GraphicsDeviceType.Vulkan ||
+                taskApi.runningMode != Tasks.Vision.Core.RunningMode.LIVE_STREAM)
+            {
+                Debug.LogError("[FaceLandmarker] Requires ImageReadMode.GPU, Vulkan, and LIVE_STREAM.");
+                yield break;
+            }
 
-            // Use RGBA32 as the input format.
-            // TODO: When using GpuBuffer, MediaPipe assumes that the input format is BGRA, so maybe the following code needs to be fixed.
-            _textureFramePool = new Experimental.TextureFramePool(imageSource.textureWidth, imageSource.textureHeight, TextureFormat.RGBA32, framePoolSize);
+            if (vulkanBridge == null)
+            {
+                Debug.LogError("[FaceLandmarker] VulkanMediaPipeBridgeManager is not assigned.");
+                yield break;
+            }
 
-            // NOTE: The screen will be resized later, keeping the aspect ratio.
             screen.Initialize(imageSource);
-
             SetupAnnotationController(_faceLandmarkerResultAnnotationController, imageSource);
 
-            var transformationOptions = imageSource.GetTransformationOptions();
-            var flipHorizontally = transformationOptions.flipHorizontally;
-            var flipVertically = transformationOptions.flipVertically;
-            var imageProcessingOptions = new Tasks.Vision.Core.ImageProcessingOptions(rotationDegrees: (int)transformationOptions.rotationAngle);
+            var transform = imageSource.GetTransformationOptions();
+            var imageProcessingOptions =
+                new Tasks.Vision.Core.ImageProcessingOptions(rotationDegrees: (int)transform.rotationAngle);
 
-            AsyncGPUReadbackRequest req = default;
-            var waitUntilReqDone = new WaitUntil(() => req.done);
-            var waitForEndOfFrame = new WaitForEndOfFrame();
-            var result = FaceLandmarkerResult.Alloc(options.numFaces);
+            while (!vulkanBridge.IsReady)
+                yield return null;
 
-            // NOTE: we can share the GL context of the render thread with MediaPipe (for now, only on Android)
-            var canUseGpuImage = SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3 && GpuManager.GpuResources != null;
-            using var glContext = canUseGpuImage ? GpuManager.GetGlContext() : null;
+            using var glContext = GpuManager.GetGlContext();
+            if (glContext == null)
+            {
+                Debug.LogError("[FaceLandmarker] MediaPipe GL context is unavailable.");
+                yield break;
+            }
 
-            Debug.Log("========== MEDIAPIPE INPUT CONFIG ==========");
-            Debug.Log($"Graphics API: {SystemInfo.graphicsDeviceType}");
-            Debug.Log($"GpuManager resources available: {GpuManager.GpuResources != null}");
-            Debug.Log($"ImageReadMode requested: {config.ImageReadMode}");
-            Debug.Log($"Can use GPU image directly: {canUseGpuImage}");
-            Debug.Log($"FaceLandmarker delegate: {config.Delegate}");
-            Debug.Log("============================================");
-
-            _frameCount = 0;
-            _callbackCount = 0;
+            int currentSlot = 0;
+            int nextSlot = 1;
 
             while (true)
             {
                 if (isPaused)
-                {
                     yield return new WaitWhile(() => isPaused);
+
+                if (!vulkanBridge.IsSlotPrepared(currentSlot))
+                {
+                    Debug.LogError($"[FaceLandmarker] Slot {currentSlot} is not ready for MediaPipe.");
+                    yield break;
                 }
 
-                if (!_textureFramePool.TryGetTextureFrame(out var textureFrame))
+                Image image = vulkanBridge.CreateMediaPipeImage(currentSlot, glContext);
+                if (image == null)
                 {
+                    Debug.LogError($"[FaceLandmarker] Failed to wrap slot {currentSlot} as a MediaPipe GPU image.");
+                    yield break;
+                }
+
+                Interlocked.Exchange(ref inferenceCallbackReceived, 0);
+
+                long cycleStart = Stopwatch.GetTimestamp();
+                long inferenceStart = Stopwatch.GetTimestamp();
+                long timestamp = GetCurrentTimestampMillisec();
+
+                taskApi.DetectAsync(image, timestamp, imageProcessingOptions);
+
+                long bridgeStart = Stopwatch.GetTimestamp();
+                if (!vulkanBridge.BeginPrepareFrame(nextSlot))
+                {
+                    Debug.LogError($"[FaceLandmarker] Failed to begin preparing slot {nextSlot}.");
+                    yield break;
+                }
+
+                double bridgeReadyMs = -1;
+
+                while (Volatile.Read(ref inferenceCallbackReceived) == 0)
+                {
+                    if (bridgeReadyMs < 0 && vulkanBridge.IsFrameSyncReady(nextSlot))
+                        bridgeReadyMs = ElapsedMs(bridgeStart);
+
                     yield return null;
-                    continue;
                 }
 
-                _frameCount++;
-                float captureStartTime = Time.realtimeSinceStartup;
+                double inferenceMs = ElapsedMs(inferenceStart);
+                long releaseStart = Stopwatch.GetTimestamp();
 
-                // Build the input Image
-                Image image;
+                while (!vulkanBridge.IsMediaPipeImageReleased(currentSlot))
+                    yield return null;
 
-                switch (config.ImageReadMode)
+                vulkanBridge.WaitForMediaPipeRelease(currentSlot);
+                double releaseMs = ElapsedMs(releaseStart);
+
+                if (bridgeReadyMs < 0 && vulkanBridge.IsFrameSyncReady(nextSlot))
+                    bridgeReadyMs = ElapsedMs(bridgeStart);
+
+                long bridgeTailStart = Stopwatch.GetTimestamp();
+
+                while (!vulkanBridge.IsFrameSyncReady(nextSlot))
                 {
-                    case ImageReadMode.CPU:
-                        Debug.Log("ImageReadMode: CPU");
-                        yield return waitForEndOfFrame;
-                        textureFrame.ReadTextureOnCPU(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-                        image = textureFrame.BuildCPUImage();
-                        textureFrame.Release();
-                        break;
-                    case ImageReadMode.GPU:
-                        if (canUseGpuImage)
-                        {
-                            Debug.Log("ImageReadMode: GPU");
-                            textureFrame.ReadTextureOnGPU(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-                            image = textureFrame.BuildGPUImage(glContext);
-                            // TODO: Currently we wait here for one frame to make sure the texture is fully copied to the TextureFrame before sending it to MediaPipe.
-                            // This usually works but is not guaranteed. Find a proper way to do this. See: https://github.com/homuler/MediaPipeUnityPlugin/pull/1311
-                            yield return waitForEndOfFrame;
-                        } else {
-                            Debug.LogWarning("Vulkan graphics API not yet supported for GPU, swapping to CPUAsync");
-                            req = textureFrame.ReadTextureAsync(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-                            yield return waitUntilReqDone;
+                    if (isPaused)
+                        yield return new WaitWhile(() => isPaused);
 
-                            if (req.hasError)
-                            {
-                                Debug.LogWarning($"[FacePerf] Readback ERROR");
-
-                                textureFrame.Release();
-                                continue;
-                            }
-
-                            image = textureFrame.BuildCPUImage();
-                            textureFrame.Release();
-                        }
-                        break;
-                    case ImageReadMode.CPUAsync:
-                    default:
-                        Debug.Log("ImageReadMode: CPUAsync");
-
-                        long readbackStartMs = _performanceStopwatch.ElapsedMilliseconds;
-
-                        req = textureFrame.ReadTextureAsync(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-
-                        yield return waitUntilReqDone;
-
-                        long readbackEndMs = _performanceStopwatch.ElapsedMilliseconds;
-
-                        long readbackMs = readbackEndMs - readbackStartMs;
-
-                        _totalReadbackMs += readbackMs;
-
-                        if (req.hasError)
-                        {
-                            Debug.LogWarning($"[FacePerf] Readback ERROR | " + $"frame={_frameCount} | " + $"time={readbackMs} ms");
-
-                            textureFrame.Release();
-                            continue;
-                        }
-
-                        image = textureFrame.BuildCPUImage();
-                        textureFrame.Release();
-
-                        if (_frameCount % 30 == 0)
-                        {
-                            Debug.Log($"[FacePerf] READBACK | " + $"frame={_frameCount} | " + $"duration={readbackMs} ms | " + $"resolution={imageSource.textureWidth}x{imageSource.textureHeight}");
-                        }
-
-                        break;
+                    yield return null;
                 }
 
-                // OLD SWITCH, SYSTEM FAILS IF IMAGE READ MODE IS GPU AND GRAPHICS API IS VULKAN
-                //switch (config.ImageReadMode)
-                //{
-                //    case ImageReadMode.GPU:
-                //        if (!canUseGpuImage)
-                //        {
-                //            throw new System.Exception("ImageReadMode.GPU is not supported");
-                //        }
-                //        Debug.Log("ImageReadMode: GPU");
-                //        textureFrame.ReadTextureOnGPU(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-                //        image = textureFrame.BuildGPUImage(glContext);
-                //        // TODO: Currently we wait here for one frame to make sure the texture is fully copied to the TextureFrame before sending it to MediaPipe.
-                //        // This usually works but is not guaranteed. Find a proper way to do this. See: https://github.com/homuler/MediaPipeUnityPlugin/pull/1311
-                //        yield return waitForEndOfFrame;
-                //        break;
-                //    case ImageReadMode.CPU:
-                //        Debug.Log("ImageReadMode: CPU");
-                //        yield return waitForEndOfFrame;
-                //        textureFrame.ReadTextureOnCPU(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-                //        image = textureFrame.BuildCPUImage();
-                //        textureFrame.Release();
-                //        break;
-                //    case ImageReadMode.CPUAsync:
-                //    default:
-                //        Debug.Log("ImageReadMode: CPU");
+                if (bridgeReadyMs < 0)
+                    bridgeReadyMs = ElapsedMs(bridgeStart);
 
-                //        long readbackStartMs = _performanceStopwatch.ElapsedMilliseconds;
-
-                //        req = textureFrame.ReadTextureAsync(imageSource.GetCurrentTexture(), flipHorizontally, flipVertically);
-
-                //        yield return waitUntilReqDone;
-
-                //        long readbackEndMs = _performanceStopwatch.ElapsedMilliseconds;
-
-                //        long readbackMs = readbackEndMs - readbackStartMs;
-
-                //        _totalReadbackMs += readbackMs;
-
-                //        if (req.hasError)
-                //        {
-                //            Debug.LogWarning($"[FacePerf] Readback ERROR | " + $"frame={_frameCount} | " + $"time={readbackMs} ms");
-
-                //            textureFrame.Release();
-                //            continue;
-                //        }
-
-                //        image = textureFrame.BuildCPUImage();
-                //        textureFrame.Release();
-
-                //        if (_frameCount % 30 == 0)
-                //        {
-                //            Debug.Log($"[FacePerf] READBACK | " + $"frame={_frameCount} | " + $"duration={readbackMs} ms | " + $"resolution={imageSource.textureWidth}x{imageSource.textureHeight}");
-                //        }
-
-                //        break;
-                //}
-
-                // Dispatch to MediaPipe
-                float inferenceStartTime = Time.realtimeSinceStartup;
-
-                switch (taskApi.runningMode)
+                if (!vulkanBridge.FinalizePreparedFrame(nextSlot))
                 {
-                    case Tasks.Vision.Core.RunningMode.IMAGE:
-                        if (taskApi.TryDetect(image, imageProcessingOptions, ref result))
-                        {
-                            _faceLandmarkerResultAnnotationController.DrawNow(result);
-                        }
-                        else
-                        {
-                            _faceLandmarkerResultAnnotationController.DrawNow(default);
-                        }
-                        break;
-                    case Tasks.Vision.Core.RunningMode.VIDEO:
-                        if (taskApi.TryDetectForVideo(image, GetCurrentTimestampMillisec(), imageProcessingOptions, ref result))
-                        {
-                            _faceLandmarkerResultAnnotationController.DrawNow(result);
-                        }
-                        else
-                        {
-                            _faceLandmarkerResultAnnotationController.DrawNow(default);
-                        }
-                        break;
-                    case Tasks.Vision.Core.RunningMode.LIVE_STREAM:
-
-                        long dispatchNowMs = _performanceStopwatch.ElapsedMilliseconds;
-
-                        long timestamp = GetCurrentTimestampMillisec();
-
-                        long dispatchInterval = _lastDispatchMs >= 0 ? dispatchNowMs - _lastDispatchMs : -1;
-
-                        _lastDispatchMs = dispatchNowMs;
-
-                        if (_frameCount % 30 == 0)
-                        {
-                            Debug.Log($"[FacePerf] DISPATCH | " + $"frame={_frameCount} | " + $"timestamp={timestamp} ms | " + $"interval={dispatchInterval} ms");
-                        }
-
-                        taskApi.DetectAsync(image, timestamp, imageProcessingOptions);
-
-                        break;
+                    Debug.LogError($"[FaceLandmarker] Slot {nextSlot} failed Vulkan-to-EGL synchronization.");
+                    yield break;
                 }
+
+                double bridgeTailMs = ElapsedMs(bridgeTailStart);
+
+                if (!vulkanBridge.IsSlotPrepared(nextSlot))
+                {
+                    Debug.LogError($"[FaceLandmarker] Slot {nextSlot} failed to prepare.");
+                    yield break;
+                }
+
+                double cycleMs = ElapsedMs(cycleStart);
+                RecordPerformance(cycleMs, inferenceMs, bridgeReadyMs, bridgeTailMs, releaseMs);
+
+                int oldCurrent = currentSlot;
+                currentSlot = nextSlot;
+                nextSlot = oldCurrent;
             }
         }
 
-        public event System.Action<FaceLandmarkerResult> OnFaceLandmarksDetected;
-
         private void OnFaceLandmarkDetectionOutput(FaceLandmarkerResult result, Image image, long timestamp)
         {
-            long callbackNowMs = _performanceStopwatch.ElapsedMilliseconds;
-
-            long callbackInterval = _lastCallbackMs >= 0 ? callbackNowMs - _lastCallbackMs : -1;
-
-            _lastCallbackMs = callbackNowMs;
-
-            _callbackCount++;
-
-            if (_callbackCount % 30 == 0)
-            {
-                Debug.Log($"[FacePerf] CALLBACK | " + $"count={_callbackCount} | " + $"timestamp={timestamp} ms | " + $"interval={callbackInterval} ms");
-            }
+            Interlocked.Exchange(ref lastFaceCount, result.faceLandmarks?.Count ?? 0);
+            Interlocked.Exchange(ref inferenceCallbackReceived, 1);
 
             _faceLandmarkerResultAnnotationController.DrawLater(result);
             OnFaceLandmarksDetected?.Invoke(result);
+        }
+
+        private void RecordPerformance(
+            double cycleMs,
+            double inferenceMs,
+            double bridgeReadyMs,
+            double bridgeTailMs,
+            double releaseMs)
+        {
+            cycleTotalMs += cycleMs;
+            inferenceTotalMs += inferenceMs;
+            bridgeReadyTotalMs += bridgeReadyMs;
+            bridgeTailTotalMs += bridgeTailMs;
+            releaseTotalMs += releaseMs;
+            performanceSamples++;
+
+            if (performanceSamples < performanceLogInterval)
+                return;
+
+            double samples = performanceSamples;
+            double averageCycle = cycleTotalMs / samples;
+            double fps = averageCycle > 0 ? 1000.0 / averageCycle : 0;
+
+            Debug.Log(
+                $"[FacePerf] {fps:F1} FPS | cycle={averageCycle:F1} ms | " +
+                $"inference={inferenceTotalMs / samples:F1} ms | " +
+                $"bridgeReady={bridgeReadyTotalMs / samples:F1} ms | " +
+                $"bridgeTail={bridgeTailTotalMs / samples:F1} ms | " +
+                $"release={releaseTotalMs / samples:F1} ms | " +
+                $"faces={Volatile.Read(ref lastFaceCount)}");
+
+            cycleTotalMs = 0;
+            inferenceTotalMs = 0;
+            bridgeReadyTotalMs = 0;
+            bridgeTailTotalMs = 0;
+            releaseTotalMs = 0;
+            performanceSamples = 0;
+        }
+
+        private static double ElapsedMs(long startTimestamp)
+        {
+            return (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
         }
     }
 }
