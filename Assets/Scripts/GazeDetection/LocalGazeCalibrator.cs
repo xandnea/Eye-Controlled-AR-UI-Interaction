@@ -25,6 +25,7 @@ public class LocalGazeCalibrator : MonoBehaviour
     [SerializeField] private TextMeshProUGUI statusInstructionsText;
 
     [Header("Calibration")]
+    [SerializeField] private int preCalibrationCountdownSeconds = 3;
     [SerializeField, Min(1f)] private float calibrationDuration = 8f;
     [SerializeField, Range(0f, 0.25f)] private float lowerPercentile = 0.05f;
     [SerializeField, Range(0.75f, 1f)] private float upperPercentile = 0.95f;
@@ -36,7 +37,7 @@ public class LocalGazeCalibrator : MonoBehaviour
     private readonly List<float> _rightX = new List<float>();
     private readonly List<float> _rightY = new List<float>();
 
-    private GazeCalibrationDebugSettings _debugSettings;
+    private GazeDebugController _debugController;
     private Coroutine _calibrationRoutine;
     private bool _isCalibrating;
 
@@ -103,16 +104,7 @@ public class LocalGazeCalibrator : MonoBehaviour
         if (gazeVisualizer != null)
             gazeVisualizer.enabled = false;
 
-        if (statusInstructionsText != null)
-        {
-            // White canvas is intentionally used as illumination, so instructions
-            // must remain dark enough to read against it.
-            statusInstructionsText.color = Color.black;
-            statusInstructionsText.gameObject.SetActive(true);
-            statusInstructionsText.text =
-                "Gaze Calibration:\n" +
-                "Keep your head still and look as far up, down, left, and right as is comfortable.";
-        }
+        yield return RunPreCalibrationCountdown();
 
         _isCalibrating = true;
         yield return new WaitForSeconds(calibrationDuration);
@@ -191,6 +183,33 @@ public class LocalGazeCalibrator : MonoBehaviour
             $"{upperPercentile * 100f:F0}");
 
         _calibrationRoutine = null;
+    }
+
+    /// <summary>
+    /// Shows a short preparation countdown before the local calibration begins.
+    /// The text is black because the calibration canvas uses a white illumination background.
+    /// </summary>
+    private IEnumerator RunPreCalibrationCountdown()
+    {
+        if (statusInstructionsText == null)
+            yield break;
+
+        statusInstructionsText.color = Color.black;
+        statusInstructionsText.gameObject.SetActive(true);
+
+        int seconds = Mathf.Max(1, preCalibrationCountdownSeconds);
+
+        for (int remaining = seconds; remaining >= 1; --remaining)
+        {
+            statusInstructionsText.text =
+                $"Look as far up, down, left, and right as you can while keeping your head still in: {remaining}";
+
+            yield return new WaitForSeconds(1f);
+        }
+
+        statusInstructionsText.color = Color.red;
+        statusInstructionsText.text =
+            "Look as far up, down, left, and right as you can. Keep your head still.";
     }
 
     /// <summary>
@@ -303,21 +322,19 @@ public class LocalGazeCalibrator : MonoBehaviour
     }
 
     /// <summary>
-    /// Locates the shared GazeCalibrationDebugSettings instance.
+    /// Resolves the shared gaze debug controller from the "Gaze Calibration"
+    /// parent hierarchy.
     /// </summary>
     private void ResolveDebugSettings()
     {
-        _debugSettings = GetComponentInParent<GazeCalibrationDebugSettings>();
-
-        if (_debugSettings == null)
-            _debugSettings = FindFirstObjectByType<GazeCalibrationDebugSettings>();
+        _debugController = GetComponentInParent<GazeDebugController>();
     }
 
     /// <summary>
     /// Gets whether optional calibration diagnostics are currently enabled.
     /// </summary>
     private bool DebuggingEnabled =>
-        _debugSettings != null && _debugSettings.EnableDebugLogging;
+        _debugController != null && _debugController.EnableDebugLogging;
 
     /// <summary>
     /// Writes an optional diagnostic message through the centralized debug switch.

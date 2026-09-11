@@ -21,7 +21,7 @@ public class GazeVisualizer : MonoBehaviour
 
     private readonly object _gazeLock = new object();
 
-    private GazeCalibrationDebugSettings _debugSettings;
+    private GazeDebugController _debugController;
 
     private Vector2 _currentGaze;
     private int _sampleVersion;
@@ -307,16 +307,12 @@ public class GazeVisualizer : MonoBehaviour
     }
 
     /// <summary>
-    /// Locates the shared debug settings component. Parent lookup is preferred so
-    /// the overhead "Gaze Calibration" object naturally controls its child scripts;
-    /// a scene-wide fallback supports existing hierarchies without extra wiring.
+    /// Resolves the shared gaze debug controller from the "Gaze Calibration"
+    /// parent hierarchy.
     /// </summary>
     private void ResolveDebugSettings()
     {
-        _debugSettings = GetComponentInParent<GazeCalibrationDebugSettings>();
-
-        if (_debugSettings == null)
-            _debugSettings = FindFirstObjectByType<GazeCalibrationDebugSettings>();
+        _debugController = GetComponentInParent<GazeDebugController>();
     }
 
     /// <summary>
@@ -325,7 +321,7 @@ public class GazeVisualizer : MonoBehaviour
     /// <param name="message">Message to send to Unity's log.</param>
     private void DebugLog(string message)
     {
-        if (_debugSettings != null && _debugSettings.EnableDebugLogging)
+        if (_debugController != null && _debugController.EnableDebugLogging)
             Debug.Log(message);
     }
 }

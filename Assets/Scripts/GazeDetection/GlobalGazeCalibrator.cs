@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,12 +13,15 @@ using UnityEngine.UI;
 ///
 ///     output = c0 + c1*x + c2*y + c3*x*y + c4*x^2 + c5*y^2
 ///
-/// Screen X and Y are fitted independently with least squares. Runtime gaze is then
-/// mapped into the calibrated UI area, converted safely into the cursor's actual
-/// RectTransform anchor space, passed through a continuous radial deadzone, and
-/// smoothed using a frame-rate-independent exponential filter.
+/// Screen X and Y are fitted independently with least squares. Before accepting the
+/// fit, neighboring calibration targets are checked for sufficient gaze-space
+/// separation so a collapsed/noisy region cannot silently produce an unusable map.
 ///
-/// Optional diagnostics are controlled by GazeCalibrationDebugSettings on the
+/// Runtime gaze is then mapped into the calibrated UI area, converted safely into the
+/// cursor's actual RectTransform anchor space, passed through a continuous radial
+/// deadzone, and smoothed using a frame-rate-independent exponential filter.
+///
+/// Optional diagnostics are controlled by GazeDebugController on the
 /// overhead "Gaze Calibration" GameObject. Warnings and errors remain unconditional.
 /// </summary>
 public class GlobalGazeCalibrator : MonoBehaviour
@@ -27,22 +31,43 @@ public class GlobalGazeCalibrator : MonoBehaviour
     [SerializeField] private RectTransform calibrationArea;
     [SerializeField] private RectTransform calibrationTarget;
     [SerializeField] private RectTransform cursorIndicator;
+    [SerializeField] private TextMeshProUGUI statusInstructionsText;
 
     [Header("9-Point Calibration")]
     [SerializeField, Min(0f)] private float horizontalPadding = 60f;
     [SerializeField, Min(0f)] private float verticalPadding = 80f;
-    [SerializeField, Range(0.1f, 2f)] private float settleTimePerTarget = 0.5f;
-    [SerializeField, Range(0.25f, 3f)] private float sampleTimePerTarget = 0.8f;
+
+    [Tooltip("Seconds shown before the first calibration target appears.")]
+    [SerializeField, Range(1, 5)] private int preCalibrationCountdownSeconds = 3;
+
+    [Tooltip("Time to let the eyes settle after each target moves before samples are recorded.")]
+    [SerializeField, Range(0.1f, 2f)] private float settleTimePerTarget = 0.75f;
+
+    [Tooltip("Time spent collecting gaze samples at each target.")]
+    [SerializeField, Range(0.25f, 3f)] private float sampleTimePerTarget = 1.0f;
+
     [SerializeField, Min(5)] private int minimumSamplesPerTarget = 10;
     [SerializeField, Range(0f, 0.4f)] private float sampleTrimFraction = 0.2f;
+
+    [Tooltip(
+        "Minimum gaze-space distance required between neighboring screen targets. " +
+        "If neighboring targets collapse to nearly the same measured gaze point, " +
+        "the calibration is rejected instead of producing a broken cursor mapping.")]
+    [SerializeField, Range(0.01f, 0.15f)] private float minimumAdjacentGazeDistance = 0.035f;
+
     [SerializeField] private Color activeColor = Color.green;
+
+    public const int MinGazeFilterSpeed = 1;
+    public const int MaxGazeFilterSpeed = 60;
+    public const int MinGazeDeadzonePixels = 0;
+    public const int MaxGazeDeadzonePixels = 30;
 
     [Header("Cursor Filter")]
     [Tooltip("Higher values follow gaze faster. Uses frame-rate-independent exponential smoothing.")]
-    [SerializeField, Range(1f, 100f)] private float gazeFilterSpeed = 30f;
+    [SerializeField, Range(MinGazeFilterSpeed, MaxGazeFilterSpeed)] private int gazeFilterSpeed = 30;
 
     [Tooltip("Continuous radial deadzone radius in canvas pixels. Only motion outside this radius is followed.")]
-    [SerializeField, Range(0f, 100f)] private float gazeDeadzonePixels = 4f;
+    [SerializeField, Range(MinGazeDeadzonePixels, MaxGazeDeadzonePixels)] private int gazeDeadzonePixels = 15;
 
     private const int BasisSize = 6;
     private const double Regularization = 1e-6;
@@ -79,7 +104,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     private readonly double[] _xCoefficients = new double[BasisSize];
     private readonly double[] _yCoefficients = new double[BasisSize];
 
-    private GazeCalibrationDebugSettings _debugSettings;
+    private GazeDebugController _debugController;
     private Coroutine _calibrationRoutine;
     private Image _targetImage;
 
@@ -128,6 +153,9 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         if (cursorIndicator != null)
             cursorIndicator.gameObject.SetActive(false);
+
+        if (statusInstructionsText != null)
+            statusInstructionsText.gameObject.SetActive(false);
     }
 
     private void OnDisable()
@@ -158,6 +186,29 @@ public class GlobalGazeCalibrator : MonoBehaviour
     }
 
     /// <summary>
+    /// Getter and setter for gaze filter speed.
+    /// </summary>
+    public int GazeFilterSpeed
+    {
+        get => gazeFilterSpeed;
+        set => gazeFilterSpeed = Mathf.Clamp(value, MinGazeFilterSpeed, MaxGazeFilterSpeed);
+    }
+
+    /// <summary>
+    /// Getter and setter for gaze deadzone pixels.
+    /// </summary>
+    public int GazeDeadzonePixels
+    {
+        get => gazeDeadzonePixels;
+        set => gazeDeadzonePixels = Mathf.Clamp(value, MinGazeDeadzonePixels, MaxGazeDeadzonePixels);
+    }
+
+    public void ResetCursorFilter()
+    {
+        _filterInitialized = false;
+    }
+
+    /// <summary>
     /// Moves one calibration target through the 3x3 grid, waits for the user's gaze
     /// to settle at each point, records a robust unique-frame sample, fits the final
     /// 2D quadratic mapping, and enables the cursor.
@@ -169,10 +220,14 @@ public class GlobalGazeCalibrator : MonoBehaviour
         _calibrationPoints.Clear();
 
         cursorIndicator.gameObject.SetActive(false);
-        calibrationTarget.gameObject.SetActive(true);
+        calibrationTarget.gameObject.SetActive(false);
 
         if (_targetImage != null)
             _targetImage.color = activeColor;
+
+        yield return RunPreCalibrationCountdown();
+
+        calibrationTarget.gameObject.SetActive(true);
 
         for (int i = 0; i < CalibrationGrid.Length; ++i)
         {
@@ -229,9 +284,40 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         calibrationTarget.gameObject.SetActive(false);
 
+        if (!ValidateCalibrationGeometry())
+        {
+            Debug.LogWarning(
+                "[GazeCal] Global calibration rejected because neighboring " +
+                "screen targets were not sufficiently separated in gaze space.");
+
+            if (statusInstructionsText != null)
+            {
+                statusInstructionsText.color = Color.red;
+                statusInstructionsText.text =
+                    "Global gaze calibration failed.\nPlease try again.";
+                statusInstructionsText.gameObject.SetActive(true);
+                yield return new WaitForSeconds(2f);
+                statusInstructionsText.gameObject.SetActive(false);
+            }
+
+            _calibrationRoutine = null;
+            yield break;
+        }
+
         if (!FitQuadraticMapping())
         {
             Debug.LogError("[Gaze] Could not solve 9-point quadratic calibration.");
+
+            if (statusInstructionsText != null)
+            {
+                statusInstructionsText.color = Color.red;
+                statusInstructionsText.text =
+                    "Global gaze calibration failed.\nPlease try again.";
+                statusInstructionsText.gameObject.SetActive(true);
+                yield return new WaitForSeconds(2f);
+                statusInstructionsText.gameObject.SetActive(false);
+            }
+
             _calibrationRoutine = null;
             yield break;
         }
@@ -268,7 +354,41 @@ public class GlobalGazeCalibrator : MonoBehaviour
                 $"{cursorIndicator.pivot.y:F2})");
         }
 
+        if (statusInstructionsText != null)
+        {
+            statusInstructionsText.color = Color.green;
+            statusInstructionsText.text = "Global gaze calibration complete.";
+            statusInstructionsText.gameObject.SetActive(true);
+            yield return new WaitForSeconds(1.5f);
+            statusInstructionsText.gameObject.SetActive(false);
+        }
+
         _calibrationRoutine = null;
+    }
+
+    /// <summary>
+    /// Shows a short preparation countdown before the first global calibration target
+    /// appears. The text is black because the calibration canvas uses a white
+    /// illumination background.
+    /// </summary>
+    private IEnumerator RunPreCalibrationCountdown()
+    {
+        if (statusInstructionsText == null)
+            yield break;
+
+        statusInstructionsText.color = Color.black;
+        statusInstructionsText.gameObject.SetActive(true);
+
+        int seconds = Mathf.Max(1, preCalibrationCountdownSeconds);
+
+        for (int remaining = seconds; remaining >= 1; --remaining)
+        {
+            statusInstructionsText.text =
+                $"Keep your eyes on the green dot in: {remaining}";
+            yield return new WaitForSeconds(1f);
+        }
+
+        statusInstructionsText.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -445,6 +565,66 @@ public class GlobalGazeCalibrator : MonoBehaviour
             cursorIndicator,
             cursorParent,
             cursorParentLocalPosition);
+    }
+
+    /// <summary>
+    /// Rejects a calibration when adjacent screen targets collapse to nearly the same
+    /// gaze-space point.
+    ///
+    /// A mapping algorithm cannot reliably distinguish two different screen regions
+    /// when their measured gaze vectors are effectively identical. In that situation
+    /// accepting the calibration produces extreme local distortion, especially near
+    /// corners. Rejecting the run is preferable to presenting a cursor that appears
+    /// calibrated but cannot reach part of the display.
+    /// </summary>
+    /// <returns>True when all horizontal and vertical neighboring targets are distinct.</returns>
+    private bool ValidateCalibrationGeometry()
+    {
+        // Index layout:
+        //     TL(1) -- TC(2) -- TR(3)
+        //       |        |        |
+        //     ML(8) --  C(0) -- MR(4)
+        //       |        |        |
+        //     BL(7) -- BC(6) -- BR(5)
+        int[,] neighborPairs =
+        {
+            { 1, 2 }, { 2, 3 },
+            { 8, 0 }, { 0, 4 },
+            { 7, 6 }, { 6, 5 },
+
+            { 1, 8 }, { 8, 7 },
+            { 2, 0 }, { 0, 6 },
+            { 3, 4 }, { 4, 5 },
+        };
+
+        bool valid = true;
+
+        for (int i = 0; i < neighborPairs.GetLength(0); ++i)
+        {
+            CalibrationPoint first =
+                _calibrationPoints[neighborPairs[i, 0]];
+            CalibrationPoint second =
+                _calibrationPoints[neighborPairs[i, 1]];
+
+            float distance =
+                Vector2.Distance(first.gaze, second.gaze);
+
+            DebugLog(
+                $"[GazeCal] separation {first.label}-{second.label} = " +
+                $"{distance:F4}");
+
+            if (distance < minimumAdjacentGazeDistance)
+            {
+                Debug.LogWarning(
+                    $"[GazeCal] Calibration geometry too compressed between " +
+                    $"{first.label} and {second.label}: distance={distance:F4}, " +
+                    $"required>={minimumAdjacentGazeDistance:F4}.");
+
+                valid = false;
+            }
+        }
+
+        return valid;
     }
 
     /// <summary>
@@ -879,16 +1059,13 @@ public class GlobalGazeCalibrator : MonoBehaviour
     }
 
     /// <summary>
-    /// Locates the centralized debug settings component. Parent lookup lets the
-    /// overhead "Gaze Calibration" object control child scripts without Inspector
-    /// wiring; scene fallback preserves compatibility with other hierarchies.
+    /// Resolves the shared gaze debug controller from the "Gaze Calibration"
+    /// parent hierarchy. No scene-wide lookup is required because the gaze system
+    /// deliberately lives beneath that object.
     /// </summary>
     private void ResolveDebugSettings()
     {
-        _debugSettings = GetComponentInParent<GazeCalibrationDebugSettings>();
-
-        if (_debugSettings == null)
-            _debugSettings = FindFirstObjectByType<GazeCalibrationDebugSettings>();
+        _debugController = GetComponentInParent<GazeDebugController>();
     }
 
     /// <summary>
@@ -897,7 +1074,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     /// <param name="message">Message to send to Unity's log.</param>
     private void DebugLog(string message)
     {
-        if (_debugSettings != null && _debugSettings.EnableDebugLogging)
+        if (_debugController != null && _debugController.EnableDebugLogging)
             Debug.Log(message);
     }
 }
