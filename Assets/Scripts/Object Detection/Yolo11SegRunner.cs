@@ -1,107 +1,173 @@
 using System;
+using System.Collections;
 using System.Text;
-using Microsoft.ML.OnnxRuntime.Unity;
 using Microsoft.ML.OnnxRuntime.Examples;
+using Microsoft.ML.OnnxRuntime.Unity;
 using TextureSource;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Events;
 using UnityEngine.Android;
+using UnityEngine.Events;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
-using System.Threading;
-using System.Collections;
 
+/// <summary>
+/// Runs YOLO11 segmentation on the latest camera texture, updates detection UI,
+/// samples AR depth for valid detections, and creates corresponding AR anchors.
+/// </summary>
 [RequireComponent(typeof(VirtualTextureSource))]
-public class Yolo11SegRunner : MonoBehaviour
+public sealed class Yolo11SegRunner : MonoBehaviour
 {
+    /// <summary>
+    /// UnityEvent that emits a texture.
+    /// </summary>
     [Serializable]
     public class TextureEvent : UnityEvent<Texture> { }
 
+    /// <summary>
+    /// UnityEvent that emits a texture aspect ratio.
+    /// </summary>
     [Serializable]
     public class AspectChangeEvent : UnityEvent<float> { }
 
-    [Header("AR Settings")]
-    [SerializeField]
-    private DepthSampler depthSampler;
-
-    [SerializeField]
-    private DetectionAnchorManager detectionAnchorManager;
+    [Header("AR Dependencies")]
+    [SerializeField] private DepthSampler depthSampler;
+    [SerializeField] private DetectionAnchorManager detectionAnchorManager;
 
     [Header("Detection Model")]
-    [SerializeField]
-    private OrtAsset model;
+    [SerializeField] private OrtAsset model;
 
     [SerializeField]
-    private RemoteFile modelFile = new("https://github.com/asus4/onnxruntime-unity-examples/releases/download/v0.2.7/yolo11n-seg-dynamic.onnx");
+    private RemoteFile modelFile = new(
+        "https://github.com/asus4/onnxruntime-unity-examples/releases/download/v0.2.7/yolo11n-seg-dynamic.onnx"
+    );
 
+    [SerializeField] private Yolo11Seg.Options options;
+
+    [Header("Detection UI")]
+    [SerializeField] private TMPro.TMP_Text detectionBoxPrefab;
+    [SerializeField] private RectTransform detectionContainer;
+    [SerializeField] private int maxDetections = 20;
+
+    [Header("Depth Sampling")]
     [SerializeField]
-    private Yolo11Seg.Options options;
+    [Range(0f, 0.15f)]
+    [Tooltip(
+        "Keeps AR depth queries away from viewport edges, where ARCore may not have " +
+        "enough neighboring depth samples. Edge detections are clamped inward rather " +
+        "than discarded."
+    )]
+    private float depthViewportMargin = 0.03f;
 
-    [SerializeField]
-    private bool runBackground = false;
-
-    [Header("Visualization Options")]
-    [SerializeField]
-    private TMPro.TMP_Text detectionBoxPrefab;
-
-    [SerializeField]
-    private RectTransform detectionContainer;
-
-    [SerializeField]
-    private int maxDetections = 20;
-
+    [Header("Output Events")]
     public TextureEvent OnSegmentationTexture = new();
     public AspectChangeEvent OnSegmentationAspectChange = new();
 
     private Yolo11Seg inference;
     private Texture latestTexture;
     private TMPro.TMP_Text[] detectionBoxes;
-    private Image[] detectionBoxOutline;
-    private Texture prevSegmentationTexture;
-    private readonly StringBuilder sb = new();
+    private Image[] detectionBoxOutlines;
+    private Texture previousSegmentationTexture;
+    private readonly StringBuilder stringBuilder = new();
 
+    /// <summary>
+    /// Registers the camera texture listener, loads the ONNX model,
+    /// initializes detection UI, and starts the camera source.
+    /// </summary>
     private async void Start()
     {
-        // 1. Hook up texture event listener early
-        if (TryGetComponent(out VirtualTextureSource source))
-        {
-            source.OnTexture.AddListener(OnTexture);
-        }
+        RegisterTextureListener();
 
-        // 2. Load ONNX model
+        ObjectDetectionDebug.Log(
+            ObjectDetectionLogCategory.Lifecycle,
+            "Loading YOLO11 segmentation model.",
+            this
+        );
+
         byte[] onnxFile = model != null
             ? model.bytes
             : await modelFile.Load(destroyCancellationToken);
 
         inference = new Yolo11Seg(onnxFile, options);
 
-        // 3. Setup detection bounding box UI elements
-        detectionBoxes = new TMPro.TMP_Text[maxDetections];
-        detectionBoxOutline = new Image[maxDetections];
-        for (int i = 0; i < maxDetections; i++)
-        {
-            var box = Instantiate(detectionBoxPrefab, detectionContainer);
-            box.name = $"Detection {i}";
-            box.gameObject.SetActive(false);
-            detectionBoxes[i] = box;
-            detectionBoxOutline[i] = box.transform.GetChild(0).GetComponent<Image>();
-        }
+        InitializeDetectionBoxes();
 
-        // 4. Start camera only after model is loaded
+        ObjectDetectionDebug.Log(
+            ObjectDetectionLogCategory.Lifecycle,
+            "YOLO11 segmentation model initialized.",
+            this
+        );
+
         StartCoroutine(StartCamera());
     }
 
+    /// <summary>
+    /// Removes event listeners and disposes the ONNX inference object.
+    /// </summary>
     private void OnDestroy()
     {
         if (TryGetComponent(out VirtualTextureSource source))
-        {
             source.OnTexture.RemoveListener(OnTexture);
-        }
 
         inference?.Dispose();
-        prevSegmentationTexture = null;
+        previousSegmentationTexture = null;
     }
 
+    /// <summary>
+    /// Registers this runner to receive textures from the attached VirtualTextureSource.
+    /// </summary>
+    private void RegisterTextureListener()
+    {
+        if (!TryGetComponent(out VirtualTextureSource source))
+        {
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Lifecycle,
+                "VirtualTextureSource component is missing.",
+                this
+            );
+            return;
+        }
+
+        source.OnTexture.AddListener(OnTexture);
+    }
+
+    /// <summary>
+    /// Instantiates and caches detection-box UI elements.
+    /// </summary>
+    private void InitializeDetectionBoxes()
+    {
+        if (detectionBoxPrefab == null || detectionContainer == null)
+        {
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Lifecycle,
+                "Detection box prefab or detection container is not assigned.",
+                this
+            );
+            return;
+        }
+
+        detectionBoxes = new TMPro.TMP_Text[maxDetections];
+        detectionBoxOutlines = new Image[maxDetections];
+
+        for (int i = 0; i < maxDetections; i++)
+        {
+            TMPro.TMP_Text box =
+                Instantiate(detectionBoxPrefab, detectionContainer);
+
+            box.name = $"Detection {i}";
+            box.gameObject.SetActive(false);
+
+            detectionBoxes[i] = box;
+
+            if (box.transform.childCount > 0)
+                detectionBoxOutlines[i] =
+                    box.transform.GetChild(0).GetComponent<Image>();
+        }
+    }
+
+    /// <summary>
+    /// Requests Android camera permission when needed and enables the camera texture source.
+    /// </summary>
+    /// <returns>Coroutine enumerator used by Unity while camera permission is pending.</returns>
     private IEnumerator StartCamera()
     {
 #if UNITY_ANDROID
@@ -110,35 +176,111 @@ public class Yolo11SegRunner : MonoBehaviour
             Permission.RequestUserPermission(Permission.Camera);
 
             while (!Permission.HasUserAuthorizedPermission(Permission.Camera))
-            {
                 yield return null;
-            }
         }
 #endif
 
-        // Enable camera ONCE when everything is ready
         if (TryGetComponent(out VirtualTextureSource source))
         {
             if (!source.enabled)
-            {
                 source.enabled = true;
-            }
+
+            ObjectDetectionDebug.Log(
+                ObjectDetectionLogCategory.Lifecycle,
+                "VirtualTextureSource enabled.",
+                this
+            );
         }
 
         yield break;
     }
 
+    /// <summary>
+    /// Stores the most recent camera texture supplied by VirtualTextureSource.
+    /// </summary>
+    /// <param name="texture">Latest camera texture.</param>
     public void OnTexture(Texture texture)
     {
         latestTexture = texture;
     }
 
+    /// <summary>
+    /// Runs one scan using the most recently received camera texture.
+    /// Existing detection anchors are cleared before the new scan.
+    /// </summary>
+    public void Scan()
+    {
+        if (inference == null)
+        {
+            ObjectDetectionDebug.LogWarning(
+                ObjectDetectionLogCategory.Yolo,
+                "Scan skipped because YOLO inference is not initialized.",
+                this
+            );
+            return;
+        }
+
+        if (latestTexture == null)
+        {
+            ObjectDetectionDebug.LogWarning(
+                ObjectDetectionLogCategory.Yolo,
+                "Scan skipped because no camera texture has been received.",
+                this
+            );
+            return;
+        }
+
+        if (depthSampler == null || detectionAnchorManager == null)
+        {
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Yolo,
+                "DepthSampler or DetectionAnchorManager is not assigned.",
+                this
+            );
+            return;
+        }
+
+        ObjectDetectionDebug.Log(
+            ObjectDetectionLogCategory.Yolo,
+            $"Scan started | texture={latestTexture.width}x{latestTexture.height}",
+            this
+        );
+
+        detectionAnchorManager.ClearAnchors();
+        RunInference(latestTexture);
+
+        ObjectDetectionDebug.Log(
+            ObjectDetectionLogCategory.Yolo,
+            $"Scan complete | detections={inference.Detections.Length}",
+            this
+        );
+    }
+
+    /// <summary>
+    /// Executes synchronous YOLO inference and dispatches the resulting UI,
+    /// segmentation, depth, and anchor updates.
+    /// </summary>
+    /// <param name="texture">Camera texture to process.</param>
+    private void RunInference(Texture texture)
+    {
+        inference.Run(texture);
+
+        ReadOnlySpan<Yolo11Seg.Detection> detections = inference.Detections;
+
+        UpdateDetectionBoxes(detections);
+        UpdateSegmentationOutput();
+        DetectDepth(detections);
+    }
+
+    /// <summary>
+    /// Converts a YOLO mask-center coordinate into a Unity viewport coordinate.
+    /// YOLO uses a top-left origin while Unity viewport coordinates use a bottom-left origin.
+    /// </summary>
+    /// <param name="maskCenter">Normalized YOLO mask-center coordinate.</param>
+    /// <returns>Normalized Unity viewport coordinate.</returns>
     private Vector2 MaskCenterToViewport(Vector2 maskCenter)
     {
-        // YOLO/image coordinates use top-left origin.
-        // Unity viewport uses bottom-left origin.
-
-        Vector2 unityPoint = new Vector2(
+        Vector2 unityPoint = new(
             maskCenter.x,
             1f - maskCenter.y
         );
@@ -147,132 +289,122 @@ public class Yolo11SegRunner : MonoBehaviour
             .MultiplyPoint3x4(unityPoint);
     }
 
-    public void Scan()
+    /// <summary>
+    /// Updates the on-screen bounding-box UI for the current detections.
+    /// </summary>
+    /// <param name="detections">YOLO detections produced by the current inference pass.</param>
+    private void UpdateDetectionBoxes(
+        ReadOnlySpan<Yolo11Seg.Detection> detections)
     {
-        if (inference == null)
-        {
-            Debug.LogWarning("Scan failed: YOLO inference is not initialized yet.");
+        if (detectionBoxes == null || detectionContainer == null)
             return;
-        }
 
-        if (latestTexture == null)
-        {
-            Debug.LogWarning("Scan failed: no camera texture received yet.");
-            return;
-        }
-
-        Debug.Log("========== SCAN PRESSED ==========");
-
-        detectionAnchorManager.ClearAnchors();
-
-        Debug.Log(
-            $"Running YOLO on texture: " +
-            $"{latestTexture.width}x{latestTexture.height}"
-        );
-
-        Run(latestTexture);
-
-        Debug.Log(
-            $"SCAN COMPLETE - Detections: {inference.Detections.Length}"
-        );
-    }
-
-    private void Run(Texture texture)
-    {
-        inference.Run(texture);
-
-        UpdateDetectionBox(inference.Detections);
-
-        var segTex = inference.SegmentationTexture;
-        Debug.Log($"SEG TEXTURE: {segTex.width}x{segTex.height} format={segTex.graphicsFormat} dimension={segTex.dimension}");
-
-        InspectSegmentationTexture(segTex);
-
-        DetectDepth(inference.Detections);
-
-        if (prevSegmentationTexture != segTex)
-        {
-            OnSegmentationTexture.Invoke(segTex);
-            OnSegmentationAspectChange.Invoke((float)segTex.width / segTex.height);
-            prevSegmentationTexture = segTex;
-        }
-    }
-
-    private async Awaitable RunAsync(Texture texture, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await inference.RunAsync(texture, cancellationToken);
-        }
-        catch (OperationCanceledException e)
-        {
-            Debug.LogWarning(e);
-            return;
-        }
-        await Awaitable.MainThreadAsync();
-
-        UpdateDetectionBox(inference.Detections);
-
-        var segTex = inference.SegmentationTexture;
-        if (prevSegmentationTexture != segTex)
-        {
-            OnSegmentationTexture.Invoke(segTex);
-            OnSegmentationAspectChange.Invoke((float)segTex.width / segTex.height);
-            prevSegmentationTexture = segTex;
-        }
-    }
-
-    private void UpdateDetectionBox(ReadOnlySpan<Yolo11Seg.Detection> detections)
-    {
         var labels = inference.labelNames;
         Vector2 viewportSize = detectionContainer.rect.size;
 
+        int visibleCount = Math.Min(detections.Length, maxDetections);
         int i;
-        int length = Math.Min(detections.Length, maxDetections);
-        for (i = 0; i < length; i++)
-        {
-            var detection = detections[i];
-            var color = detection.GetColor();
-            var box = detectionBoxes[i];
 
-            Debug.Log($"YOLO Detection index={i} classID={detection.label} className={labels[detection.label]} confidence={detection.probability:F3} rect={detection.rect}");
+        for (i = 0; i < visibleCount; i++)
+        {
+            Yolo11Seg.Detection detection = detections[i];
+            Color color = detection.GetColor();
+            TMPro.TMP_Text box = detectionBoxes[i];
+
+            ObjectDetectionDebug.Log(
+                ObjectDetectionLogCategory.Detections,
+                $"Detection[{i}] | classId={detection.label} " +
+                $"class={labels[detection.label]} confidence={detection.probability:F3} " +
+                $"rect={detection.rect}",
+                this
+            );
+
             box.gameObject.SetActive(true);
 
-            sb.Clear();
-            sb.Append(labels[detection.label]);
-            sb.Append(": ");
-            sb.Append((int)(detection.probability * 100));
-            sb.Append('%');
-            box.SetText(sb);
+            stringBuilder.Clear();
+            stringBuilder.Append(labels[detection.label]);
+            stringBuilder.Append(": ");
+            stringBuilder.Append((int)(detection.probability * 100));
+            stringBuilder.Append('%');
+
+            box.SetText(stringBuilder);
             box.color = color;
 
-            RectTransform rt = box.rectTransform;
+            RectTransform rectTransform = box.rectTransform;
             Rect rect = inference.ConvertToViewport(detection.rect);
-            rt.anchoredPosition = rect.min * viewportSize;
-            rt.sizeDelta = rect.size * viewportSize;
 
-            detectionBoxOutline[i].color = color;
+            rectTransform.anchoredPosition = rect.min * viewportSize;
+            rectTransform.sizeDelta = rect.size * viewportSize;
+
+            if (detectionBoxOutlines[i] != null)
+                detectionBoxOutlines[i].color = color;
         }
 
         for (; i < maxDetections; i++)
-        {
             detectionBoxes[i].gameObject.SetActive(false);
-        }
     }
 
+    /// <summary>
+    /// Emits the current segmentation texture and aspect ratio when the output texture changes.
+    /// Optional GPU-readback diagnostics are performed only when Segmentation logging is enabled.
+    /// </summary>
+    private void UpdateSegmentationOutput()
+    {
+        Texture segmentationTexture = inference.SegmentationTexture;
+
+        ObjectDetectionDebug.Log(
+            ObjectDetectionLogCategory.Segmentation,
+            $"Segmentation texture | {segmentationTexture.width}x{segmentationTexture.height} " +
+            $"format={segmentationTexture.graphicsFormat} dimension={segmentationTexture.dimension}",
+            this
+        );
+
+        InspectSegmentationTexture(segmentationTexture);
+
+        if (previousSegmentationTexture == segmentationTexture)
+            return;
+
+        OnSegmentationTexture.Invoke(segmentationTexture);
+
+        OnSegmentationAspectChange.Invoke(
+            (float)segmentationTexture.width / segmentationTexture.height
+        );
+
+        previousSegmentationTexture = segmentationTexture;
+    }
+
+    /// <summary>
+    /// Reads segmentation pixels back from the GPU for diagnostics.
+    /// The readback is completely skipped unless Segmentation logging is enabled.
+    /// </summary>
+    /// <param name="texture">Segmentation texture to inspect.</param>
     private void InspectSegmentationTexture(Texture texture)
     {
-        if (texture is not RenderTexture rt)
+        if (!ObjectDetectionDebug.IsCategoryEnabled(
+                ObjectDetectionLogCategory.Segmentation))
         {
-            Debug.LogError($"Segmentation texture is not a RenderTexture: {texture.GetType()}");
             return;
         }
 
-        AsyncGPUReadback.Request(rt, 0, request =>
+        if (texture is not RenderTexture renderTexture)
+        {
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Segmentation,
+                $"Segmentation texture is not a RenderTexture: {texture.GetType()}",
+                this
+            );
+            return;
+        }
+
+        AsyncGPUReadback.Request(renderTexture, 0, request =>
         {
             if (request.hasError)
             {
-                Debug.LogError("Segmentation texture GPU readback failed.");
+                ObjectDetectionDebug.LogError(
+                    ObjectDetectionLogCategory.Segmentation,
+                    "Segmentation texture GPU readback failed.",
+                    this
+                );
                 return;
             }
 
@@ -281,87 +413,140 @@ public class Yolo11SegRunner : MonoBehaviour
             int nonTransparent = 0;
             int nonBlack = 0;
 
-            byte minR = 255, minG = 255, minB = 255, minA = 255;
-            byte maxR = 0, maxG = 0, maxB = 0, maxA = 0;
+            byte minR = 255;
+            byte minG = 255;
+            byte minB = 255;
+            byte minA = 255;
 
-            foreach (var p in data)
+            byte maxR = 0;
+            byte maxG = 0;
+            byte maxB = 0;
+            byte maxA = 0;
+
+            foreach (Color32 pixel in data)
             {
-                if (p.a > 5) nonTransparent++;
-                if (p.r > 5 || p.g > 5 || p.b > 5) nonBlack++;
+                if (pixel.a > 5)
+                    nonTransparent++;
 
-                minR = (byte)Mathf.Min(minR, p.r);
-                minG = (byte)Mathf.Min(minG, p.g);
-                minB = (byte)Mathf.Min(minB, p.b);
-                minA = (byte)Mathf.Min(minA, p.a);
+                if (pixel.r > 5 || pixel.g > 5 || pixel.b > 5)
+                    nonBlack++;
 
-                maxR = (byte)Mathf.Max(maxR, p.r);
-                maxG = (byte)Mathf.Max(maxG, p.g);
-                maxB = (byte)Mathf.Max(maxB, p.b);
-                maxA = (byte)Mathf.Max(maxA, p.a);
+                minR = (byte)Mathf.Min(minR, pixel.r);
+                minG = (byte)Mathf.Min(minG, pixel.g);
+                minB = (byte)Mathf.Min(minB, pixel.b);
+                minA = (byte)Mathf.Min(minA, pixel.a);
+
+                maxR = (byte)Mathf.Max(maxR, pixel.r);
+                maxG = (byte)Mathf.Max(maxG, pixel.g);
+                maxB = (byte)Mathf.Max(maxB, pixel.b);
+                maxA = (byte)Mathf.Max(maxA, pixel.a);
             }
 
-            Debug.Log($"SEG GPU DATA: pixels={data.Length}, nonTransparent={nonTransparent}, nonBlack={nonBlack}, R={minR}-{maxR}, G={minG}-{maxG}, B={minB}-{maxB}, A={minA}-{maxA}");
+            ObjectDetectionDebug.Log(
+                ObjectDetectionLogCategory.Segmentation,
+                $"GPU pixels={data.Length} nonTransparent={nonTransparent} " +
+                $"nonBlack={nonBlack} R={minR}-{maxR} G={minG}-{maxG} " +
+                $"B={minB}-{maxB} A={minA}-{maxA}",
+                this
+            );
         });
     }
 
-    private void DetectDepth(ReadOnlySpan<Yolo11Seg.Detection> detections)
+    /// <summary>
+    /// Samples AR depth at each detection's mask center and creates an AR anchor
+    /// when a valid depth hit is available. Viewport coordinates close to an edge
+    /// are clamped inward before querying ARCore so detections are not discarded
+    /// merely because the original mask center lies in an unsupported depth border.
+    /// </summary>
+    /// <param name="detections">YOLO detections produced by the current inference pass.</param>
+    private void DetectDepth(
+        ReadOnlySpan<Yolo11Seg.Detection> detections)
     {
         var labels = inference.labelNames;
 
-        Debug.Log("========== DETECTION DEPTH ==========");
-
         for (int i = 0; i < detections.Length; i++)
         {
-            var detection = detections[i];
+            Yolo11Seg.Detection detection = detections[i];
+            string className = labels[detection.label];
 
             if (!detection.hasMaskCenter)
             {
-                Debug.Log(
-                    $"DEPTH [{i}] " +
-                    $"{labels[detection.label]} " +
-                    "NO MASK CENTER"
+                ObjectDetectionDebug.Log(
+                    ObjectDetectionLogCategory.Depth,
+                    $"Detection[{i}] {className} has no mask center.",
+                    this
                 );
-
                 continue;
             }
 
             Vector2 maskCenter = detection.maskCenter;
+            Vector2 detectedViewport = MaskCenterToViewport(maskCenter);
+            Vector2 depthViewport = ClampViewportForDepth(detectedViewport);
 
-            Vector2 viewport = MaskCenterToViewport(maskCenter);
+            if (depthViewport != detectedViewport)
+            {
+                ObjectDetectionDebug.Log(
+                    ObjectDetectionLogCategory.Depth,
+                    $"Detection[{i}] | class={className} depth query clamped " +
+                    $"from viewport={detectedViewport} to viewport={depthViewport} " +
+                    $"using margin={depthViewportMargin:F3}.",
+                    this
+                );
+            }
 
             bool gotDepth = depthSampler.TryGetDepth(
-                viewport,
+                depthViewport,
                 out float depth,
                 out Vector3 worldPosition
             );
 
             if (!gotDepth)
             {
-                Debug.Log(
-                    $"DEPTH [{i}] " +
-                    $"class={labels[detection.label]} " +
+                ObjectDetectionDebug.Log(
+                    ObjectDetectionLogCategory.Depth,
+                    $"Detection[{i}] | class={className} " +
                     $"confidence={detection.probability:F3} " +
-                    $"maskCenter={maskCenter} " +
-                    $"viewport={viewport} " +
-                    "NO DEPTH HIT"
+                    $"maskCenter={maskCenter} detectedViewport={detectedViewport} " +
+                    $"depthViewport={depthViewport} no depth hit.",
+                    this
                 );
-
                 continue;
             }
 
-            Debug.Log(
-                $"DEPTH [{i}] " +
-                $"class={labels[detection.label]} " +
-                $"confidence={detection.probability:F3} " +
-                $"maskCenter={maskCenter} " +
-                $"viewport={viewport} " +
-                $"depth={depth:F3}m " +
-                $"world={worldPosition}"
+            ObjectDetectionDebug.Log(
+                ObjectDetectionLogCategory.Depth,
+                $"Detection[{i}] | class={className} " +
+                $"confidence={detection.probability:F3} maskCenter={maskCenter} " +
+                $"detectedViewport={detectedViewport} depthViewport={depthViewport} " +
+                $"depth={depth:F3}m world={worldPosition}",
+                this
             );
 
-            detectionAnchorManager.CreateAnchor(viewport, depth, worldPosition, i, labels[detection.label]);
+            detectionAnchorManager.CreateAnchor(
+                depthViewport,
+                depth,
+                worldPosition,
+                i,
+                className
+            );
         }
+    }
 
-        Debug.Log("====================================");
+    /// <summary>
+    /// Clamps a normalized viewport coordinate inward so ARCore has enough
+    /// neighboring depth samples to evaluate points near the screen border.
+    /// </summary>
+    /// <param name="viewportPoint">Original normalized Unity viewport coordinate.</param>
+    /// <returns>
+    /// A viewport coordinate constrained to the configured depth-sampling margin.
+    /// </returns>
+    private Vector2 ClampViewportForDepth(Vector2 viewportPoint)
+    {
+        float margin = Mathf.Clamp(depthViewportMargin, 0f, 0.49f);
+
+        return new Vector2(
+            Mathf.Clamp(viewportPoint.x, margin, 1f - margin),
+            Mathf.Clamp(viewportPoint.y, margin, 1f - margin)
+        );
     }
 }

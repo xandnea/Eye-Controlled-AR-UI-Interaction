@@ -3,41 +3,60 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
-public class DepthSampler : MonoBehaviour
+/// <summary>
+/// Samples ARCore depth at a normalized viewport coordinate and returns the
+/// corresponding world-space hit position.
+/// </summary>
+public sealed class DepthSampler : MonoBehaviour
 {
-    [SerializeField]
-    private ARRaycastManager raycastManager;
-
-    [SerializeField]
-    private Camera arCamera;
+    [Header("AR Dependencies")]
+    [SerializeField] private ARRaycastManager raycastManager;
+    [SerializeField] private Camera arCamera;
 
     private readonly List<ARRaycastHit> hits = new();
 
-    public bool TryGetDepth(Vector2 viewportPoint, out float depth, out Vector3 worldPosition)
+    /// <summary>
+    /// Attempts to obtain a depth hit at a normalized Unity viewport coordinate.
+    /// </summary>
+    /// <param name="viewportPoint">
+    /// Normalized viewport coordinate where (0,0) is bottom-left and (1,1) is top-right.
+    /// </param>
+    /// <param name="depth">
+    /// Receives the Euclidean distance in meters from the AR camera to the hit position.
+    /// </param>
+    /// <param name="worldPosition">
+    /// Receives the world-space position returned by the AR depth raycast.
+    /// </param>
+    /// <returns>True when a valid AR depth hit is found; otherwise false.</returns>
+    public bool TryGetDepth(
+        Vector2 viewportPoint,
+        out float depth,
+        out Vector3 worldPosition)
     {
         depth = 0f;
         worldPosition = default;
 
         if (raycastManager == null)
         {
-            Debug.LogError("DepthSampler: ARRaycastManager is not assigned.");
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Depth,
+                "ARRaycastManager is not assigned.",
+                this
+            );
             return false;
         }
 
         if (arCamera == null)
         {
-            Debug.LogError("DepthSampler: AR Camera is not assigned.");
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Depth,
+                "AR Camera is not assigned.",
+                this
+            );
             return false;
         }
 
-        // Unity viewport:
-        // (0,0) = bottom-left
-        // (1,1) = top-right
-
-        Vector2 screenPoint = new Vector2(
-            viewportPoint.x * Screen.width,
-            viewportPoint.y * Screen.height
-        );
+        Vector2 screenPoint = ViewportToScreenPoint(viewportPoint);
 
         hits.Clear();
 
@@ -45,31 +64,44 @@ public class DepthSampler : MonoBehaviour
             screenPoint,
             hits,
             TrackableType.Depth
-         );
-
+        );
 
         if (!success || hits.Count == 0)
         {
-            Debug.LogWarning(
-                $"DepthSampler: No depth hit at screen={screenPoint}"
+            ObjectDetectionDebug.LogWarning(
+                ObjectDetectionLogCategory.Depth,
+                $"No depth hit at viewport={viewportPoint}, screen={screenPoint}.",
+                this
             );
-
             return false;
         }
 
-        Debug.Log(
-            $"DEPTH HIT | type={hits[0].hitType} " +
-            $"screen={screenPoint} " +
-            $"world={hits[0].pose.position}"
-        );
+        ARRaycastHit hit = hits[0];
+        worldPosition = hit.pose.position;
+        depth = Vector3.Distance(arCamera.transform.position, worldPosition);
 
-        worldPosition = hits[0].pose.position;
-
-        depth = Vector3.Distance(
-            arCamera.transform.position,
-            worldPosition
+        ObjectDetectionDebug.Log(
+            ObjectDetectionLogCategory.Depth,
+            $"Depth hit | type={hit.hitType} viewport={viewportPoint} " +
+            $"screen={screenPoint} depth={depth:F3}m world={worldPosition}",
+            this
         );
 
         return true;
+    }
+
+    /// <summary>
+    /// Converts a normalized viewport coordinate into a screen-space pixel coordinate.
+    /// </summary>
+    /// <param name="viewportPoint">
+    /// Normalized viewport coordinate where (0,0) is bottom-left and (1,1) is top-right.
+    /// </param>
+    /// <returns>The corresponding screen-space pixel coordinate.</returns>
+    private static Vector2 ViewportToScreenPoint(Vector2 viewportPoint)
+    {
+        return new Vector2(
+            viewportPoint.x * Screen.width,
+            viewportPoint.y * Screen.height
+        );
     }
 }
