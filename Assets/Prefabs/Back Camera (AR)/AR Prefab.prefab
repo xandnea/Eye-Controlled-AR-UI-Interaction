@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 7023303990615990233}
   - component: {fileID: 7528656911651940717}
   - component: {fileID: 5308454892826960994}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: AR Prefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}

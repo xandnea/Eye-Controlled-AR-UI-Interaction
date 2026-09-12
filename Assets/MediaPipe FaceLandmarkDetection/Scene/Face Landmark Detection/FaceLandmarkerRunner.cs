@@ -30,6 +30,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
     /// </summary>
     public class FaceLandmarkerRunner : VisionTaskApiRunner<FaceLandmarker>
     {
+        [Header("References")]
         [SerializeField]
         private FaceLandmarkerResultAnnotationController _faceLandmarkerResultAnnotationController;
 
@@ -39,6 +40,14 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
         [SerializeField, Min(1)]
         [Tooltip("Number of samples between performance log messages on the Vulkan bridge path.")]
         private int performanceLogInterval = 30;
+
+        [Header("Visualization")]
+        [SerializeField]
+        [Tooltip("Draw MediaPipe face landmark annotations. Does not affect face tracking or gaze estimation.")]
+        private bool drawLandmarks = false;
+
+        public bool DrawLandmarks => drawLandmarks;
+
 
         public readonly FaceLandmarkDetectionConfig config = new FaceLandmarkDetectionConfig();
 
@@ -71,6 +80,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
             _textureFramePool?.Dispose();
             _textureFramePool = null;
         }
+
 
         /// <summary>
         /// Initializes Face Landmarker, starts the configured image source, and routes
@@ -430,6 +440,33 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
             }
         }
 
+        public void ToggleLandmarkDrawing()
+        {
+            SetLandmarkDrawing(!drawLandmarks);
+        }
+
+        /// <summary>
+        /// Allows user to toggle the face landmarks draw call.
+        /// </summary>
+        public void SetLandmarkDrawing(bool enabled)
+        {
+            drawLandmarks = enabled;
+
+            Debug.Log($"[FaceLandmarker] Landmark drawing = {drawLandmarks}");
+
+            if (_faceLandmarkerResultAnnotationController != null)
+            {
+                var rt =
+                    _faceLandmarkerResultAnnotationController
+                    .GetComponent<RectTransform>();
+            }
+
+            if (!enabled && _faceLandmarkerResultAnnotationController != null)
+            {
+                _faceLandmarkerResultAnnotationController.DrawLater(default);
+            }
+        }
+
         /// <summary>
         /// Receives LIVE_STREAM results on MediaPipe's callback thread and exposes
         /// them to the annotation and gaze-tracking code.
@@ -449,7 +486,10 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 
             Interlocked.Exchange(ref inferenceCallbackReceived, 1);
 
-            _faceLandmarkerResultAnnotationController.DrawLater(result);
+            if (drawLandmarks && _faceLandmarkerResultAnnotationController != null)
+            {
+                _faceLandmarkerResultAnnotationController.DrawLater(result);
+            }
             OnFaceLandmarksDetected?.Invoke(result);
         }
 

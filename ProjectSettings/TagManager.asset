@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 3
   tags:
   - Additional Camera
+  - Global Resource
   layers:
   - Default
   - TransparentFX
@@ -14,8 +15,8 @@ TagManager:
   - UI
   - YOLO Overlay
   - AR Objects
-  - 
-  - 
+  - Face Landmarks
+  - Calibration Background
   - 
   - 
   - 
@@ -41,6 +42,9 @@ TagManager:
   m_SortingLayers:
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: New Layer 1
+    uniqueID: 3071896487
     locked: 0
   m_RenderingLayers:
   - Default
