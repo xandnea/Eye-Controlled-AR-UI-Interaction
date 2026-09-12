@@ -550,6 +550,10 @@ PrefabInstance:
       propertyPath: m_ReferenceResolution.y
       value: 2424
       objectReference: {fileID: 0}
+    - target: {fileID: 6636376599496717091, guid: 8c180f7de0847e544ae916bd4ca53d7a, type: 3}
+      propertyPath: m_SortingOrder
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1162,7 +1166,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1963777623
 Transform:
   m_ObjectHideFlags: 0
@@ -1232,6 +1236,14 @@ PrefabInstance:
     - target: {fileID: 96799450608994613, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: m_Name
       value: Gaze Calibration
+      objectReference: {fileID: 0}
+    - target: {fileID: 96799450608994613, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1491057383825244428, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: faceLandmarkerRunner
@@ -1398,10 +1410,34 @@ PrefabInstance:
       propertyPath: m_Name
       value: Face Landmarker Canvas
       objectReference: {fileID: 0}
+    - target: {fileID: 1700644922025989488, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4562880745918149474, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5318315988438236837, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8416554739865907581, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 9078113362551701275, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
       propertyPath: m_Camera
       value: 
       objectReference: {fileID: 1969388816}
+    - target: {fileID: 9078113362551701275, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
+      propertyPath: m_RenderMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9078113362551701275, guid: 0772ae9c9a503ea449521bbb0f132ecd, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1418,6 +1454,10 @@ PrefabInstance:
     - target: {fileID: 592220351448803410, guid: c32e73fd5b47df34fbb27330b9d29129, type: 3}
       propertyPath: m_Name
       value: Vulkan MediaPipe Bridge Manager
+      objectReference: {fileID: 0}
+    - target: {fileID: 592220351448803410, guid: c32e73fd5b47df34fbb27330b9d29129, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4327904867500340597, guid: c32e73fd5b47df34fbb27330b9d29129, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1457,6 +1497,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4327904867500340597, guid: c32e73fd5b47df34fbb27330b9d29129, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5647692896317820194, guid: c32e73fd5b47df34fbb27330b9d29129, type: 3}
+      propertyPath: startImageSourceForBridgeOnlyTest
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -1532,6 +1576,10 @@ PrefabInstance:
     - target: {fileID: 1192604118611351630, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_Name
       value: CalibrationCanvas
+      objectReference: {fileID: 0}
+    - target: {fileID: 1192604118611351630, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2118134316711516632, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_Pivot.x
@@ -1617,6 +1665,14 @@ PrefabInstance:
       propertyPath: m_Camera
       value: 
       objectReference: {fileID: 1969388816}
+    - target: {fileID: 4144788059911470225, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_RenderMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4144788059911470225, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_SortingOrder
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6254220220017646612, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
@@ -1625,6 +1681,10 @@ PrefabInstance:
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
       objectReference: {fileID: 1022957027}
+    - target: {fileID: 6760678599851802672, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1693,6 +1753,10 @@ PrefabInstance:
     - target: {fileID: 5760452640900583825, guid: c8117633168e1d04faf965a3f13b523e, type: 3}
       propertyPath: m_Name
       value: Face Landmarker Runner
+      objectReference: {fileID: 0}
+    - target: {fileID: 5760452640900583825, guid: c8117633168e1d04faf965a3f13b523e, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

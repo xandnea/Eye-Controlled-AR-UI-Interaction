@@ -17,7 +17,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
     Tasks.Core.BaseOptions.Delegate.GPU;
 #endif
 
-        public ImageReadMode ImageReadMode { get; set; } = ImageReadMode.GPU; //.GPU;
+        public ImageReadMode ImageReadMode { get; set; } = ImageReadMode.GPU;
 
     public Tasks.Vision.Core.RunningMode RunningMode { get; set; } = Tasks.Vision.Core.RunningMode.LIVE_STREAM;
 
