@@ -17,15 +17,34 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     [SerializeField] private GameObject anchorPrefab;
 
     [SerializeField]
-    [Range(1f, 5f)]
+    [Range(0f, 5f)]
     [Tooltip("Uniform scale multiplier applied to the spawned anchor visual.")]
     private float anchorScale = 1f;
+
+    [SerializeField]
+    [Range(-5f, 5f)]
+    [Tooltip("Speed of anchor rotation, can be set to spin left, right, or not at all.")]
+    private float anchorRotationSpeed = 0f;
 
     [SerializeField]
     [Tooltip("World placement offset expressed along the AR camera's local right/up/forward axes.")]
     private Vector3 anchorOffset;
 
     private readonly List<ARAnchor> activeAnchors = new();
+    private readonly List<GameObject> activeVisuals = new();
+
+    private void Update()
+    {
+        float rotationStep = anchorRotationSpeed * 50f * Time.deltaTime;
+        foreach (GameObject visual in activeVisuals)
+        {
+            if (visual != null)
+            {
+                visual.transform.Rotate(0f, 0f, rotationStep, Space.Self);
+            }
+        }
+
+    }
 
     /// <summary>
     /// Validates serialized AR dependencies before the component begins processing detections.
@@ -261,6 +280,7 @@ public sealed class DetectionAnchorManager : MonoBehaviour
         }
 
         GameObject visual = Instantiate(anchorPrefab, anchor.transform, false);
+        activeVisuals.Add(visual);
         visual.name = $"DetectionVisual_{detectionIndex}_{className}";
 
         // Preserve the prefab's authored local rotation.

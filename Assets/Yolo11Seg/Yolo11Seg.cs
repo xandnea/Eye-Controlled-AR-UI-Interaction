@@ -275,7 +275,7 @@ namespace Microsoft.ML.OnnxRuntime.Examples
 
                 bool valid;
 
-                Vector2 center = CalculateMaskTopCenter(
+                Vector2 center = CalculateMaskCenter(
                     detection,
                     output1,
                     maskChannels,
@@ -311,154 +311,48 @@ namespace Microsoft.ML.OnnxRuntime.Examples
             segmentationMarker.End();
         }
 
-        //private Vector2 CalculateMaskCenter(Detection detection, ReadOnlySpan<float> output1, int maskChannels, 
-        //                                    int maskHeight, int maskWidth, float threshold, out bool valid)
-        //{
-        //    valid = false;
-
-        //    if (maskChannels <= 0 || maskHeight <= 0 || maskWidth <= 0)
-        //        return default;
-
-        //    const int MASK_COEFFS = 32;
-
-        //    if (maskChannels != MASK_COEFFS)
-        //    {
-        //        Debug.LogWarning(
-        //            $"Unexpected mask channel count: {maskChannels}. " +
-        //            $"Expected {MASK_COEFFS}."
-        //        );
-
-        //        return default;
-        //    }
-
-        //    // ------------------------------------------------------------
-        //    // 1. Get this detection's 32 mask coefficients.
-        //    // ------------------------------------------------------------
-
-        //    var detectionData = output0Transposed
-        //        .AsReadOnlySpan()
-        //        .Slice(
-        //            detection.anchorId * output0Shape.y,
-        //            output0Shape.y
-        //        );
-
-        //    var maskCoefficients = detectionData[^MASK_COEFFS..];
-
-        //    // ------------------------------------------------------------
-        //    // 2. Convert the YOLO bounding box to mask-space coordinates.
-        //    //
-        //    // detection.rect is normalized to YOLO input dimensions.
-        //    // ------------------------------------------------------------
-
-        //    float boxMinX = Mathf.Clamp01(detection.rect.xMin);
-        //    float boxMaxX = Mathf.Clamp01(detection.rect.xMax);
-
-        //    float boxMinY = Mathf.Clamp01(detection.rect.yMin);
-        //    float boxMaxY = Mathf.Clamp01(detection.rect.yMax);
-
-        //    int minX = Mathf.Clamp(Mathf.FloorToInt(boxMinX * maskWidth), 0, maskWidth - 1);
-        //    int maxX = Mathf.Clamp(Mathf.CeilToInt(boxMaxX * maskWidth), minX + 1, maskWidth);
-        //    int minY = Mathf.Clamp(Mathf.FloorToInt(boxMinY * maskHeight), 0, maskHeight - 1);
-        //    int maxY = Mathf.Clamp(Mathf.CeilToInt(boxMaxY * maskHeight), minY + 1, maskHeight);
-
-        //    // ------------------------------------------------------------
-        //    // 3. Reconstruct the segmentation mask.
-        //    //
-        //    // output1 layout:
-        //    //
-        //    // [channel][y][x]
-        //    //
-        //    // There are 32 channels, each containing 160x160 values.
-        //    // ------------------------------------------------------------
-
-        //    double sumX = 0.0;
-        //    double sumY = 0.0;
-        //    double totalWeight = 0.0;
-
-        //    int pixels = maskHeight * maskWidth;
-
-        //    for (int y = minY; y < maxY; y++)
-        //    {
-        //        for (int x = minX; x < maxX; x++)
-        //        {
-        //            float maskValue = 0f;
-
-        //            for (int c = 0; c < MASK_COEFFS; c++)
-        //            {
-        //                int protoIndex =
-        //                    c * pixels +
-        //                    y * maskWidth +
-        //                    x;
-
-        //                maskValue +=
-        //                    maskCoefficients[c] *
-        //                    output1[protoIndex];
-        //            }
-
-        //            // Sigmoid
-        //            maskValue = 1f / (1f + Mathf.Exp(-maskValue));
-
-        //            if (maskValue < threshold)
-        //                continue;
-
-        //            // ----------------------------------------------------
-        //            // Weight the centroid by mask confidence.
-        //            //
-        //            // This is better than simply averaging all pixels
-        //            // above the threshold.
-        //            // ----------------------------------------------------
-
-        //            double weight = maskValue;
-
-        //            sumX += x * weight;
-        //            sumY += y * weight;
-        //            totalWeight += weight;
-        //        }
-        //    }
-
-        //    if (totalWeight <= 0.0)
-        //    {
-        //        return default;
-        //    }
-
-        //    // ------------------------------------------------------------
-        //    // 4. Convert mask-space center to normalized YOLO coordinates.
-        //    //
-        //    // +0.5 means we're using the pixel center.
-        //    // ------------------------------------------------------------
-
-        //    float centerX =
-        //        (float)((sumX / totalWeight + 0.5) / maskWidth);
-
-        //    float centerY =
-        //        (float)((sumY / totalWeight + 0.5) / maskHeight);
-
-        //    valid = true;
-
-        //    return new Vector2(centerX, centerY);
-        //}
-
-        private Vector2 CalculateMaskTopCenter(Detection detection, ReadOnlySpan<float> output1, int maskChannels, int maskHeight, int maskWidth, float threshold, out bool valid)
+        private Vector2 CalculateMaskCenter(Detection detection, ReadOnlySpan<float> output1, int maskChannels,
+                                            int maskHeight, int maskWidth, float threshold, out bool valid)
         {
             valid = false;
-            if (maskChannels <= 0 || maskHeight <= 0 || maskWidth <= 0) return default;
+
+            if (maskChannels <= 0 || maskHeight <= 0 || maskWidth <= 0)
+                return default;
 
             const int MASK_COEFFS = 32;
+
             if (maskChannels != MASK_COEFFS)
             {
-                Debug.LogWarning($"Unexpected mask channel count: {maskChannels}. Expected {MASK_COEFFS}.");
+                Debug.LogWarning(
+                    $"Unexpected mask channel count: {maskChannels}. " +
+                    $"Expected {MASK_COEFFS}."
+                );
+
                 return default;
             }
 
-            // 1. Get detection mask coefficients
+            // ------------------------------------------------------------
+            // 1. Get this detection's 32 mask coefficients.
+            // ------------------------------------------------------------
+
             var detectionData = output0Transposed
                 .AsReadOnlySpan()
-                .Slice(detection.anchorId * output0Shape.y, output0Shape.y);
+                .Slice(
+                    detection.anchorId * output0Shape.y,
+                    output0Shape.y
+                );
+
             var maskCoefficients = detectionData[^MASK_COEFFS..];
 
-            // 2. Convert bounding box to mask-space coordinates
+            // ------------------------------------------------------------
+            // 2. Convert the YOLO bounding box to mask-space coordinates.
+            //
+            // detection.rect is normalized to YOLO input dimensions.
+            // ------------------------------------------------------------
+
             float boxMinX = Mathf.Clamp01(detection.rect.xMin);
             float boxMaxX = Mathf.Clamp01(detection.rect.xMax);
+
             float boxMinY = Mathf.Clamp01(detection.rect.yMin);
             float boxMaxY = Mathf.Clamp01(detection.rect.yMax);
 
@@ -467,63 +361,169 @@ namespace Microsoft.ML.OnnxRuntime.Examples
             int minY = Mathf.Clamp(Mathf.FloorToInt(boxMinY * maskHeight), 0, maskHeight - 1);
             int maxY = Mathf.Clamp(Mathf.CeilToInt(boxMaxY * maskHeight), minY + 1, maskHeight);
 
-            // 3. Scan row by row from top to bottom (Highest Y down to Lowest Y)
+            // ------------------------------------------------------------
+            // 3. Reconstruct the segmentation mask.
+            //
+            // output1 layout:
+            //
+            // [channel][y][x]
+            //
+            // There are 32 channels, each containing 160x160 values.
+            // ------------------------------------------------------------
+
             double sumX = 0.0;
+            double sumY = 0.0;
             double totalWeight = 0.0;
-            int targetY = -1;
+
             int pixels = maskHeight * maskWidth;
 
-            // Change: Loop backwards from maxY - 1 down to minY
             for (int y = minY; y < maxY; y++)
             {
                 for (int x = minX; x < maxX; x++)
                 {
                     float maskValue = 0f;
+
                     for (int c = 0; c < MASK_COEFFS; c++)
                     {
-                        int protoIndex = (c * pixels) + (y * maskWidth) + x;
-                        maskValue += maskCoefficients[c] * output1[protoIndex];
+                        int protoIndex =
+                            c * pixels +
+                            y * maskWidth +
+                            x;
+
+                        maskValue +=
+                            maskCoefficients[c] *
+                            output1[protoIndex];
                     }
 
-                    // Sigmoid activation
+                    // Sigmoid
                     maskValue = 1f / (1f + Mathf.Exp(-maskValue));
 
-                    if (maskValue >= threshold)
-                    {
-                        // Found the highest row (maximum Y) containing valid mask pixels
-                        if (targetY == -1)
-                        {
-                            targetY = y;
-                        }
+                    if (maskValue < threshold)
+                        continue;
 
-                        if (y == targetY)
-                        {
-                            double weight = maskValue;
-                            sumX += x * weight;
-                            totalWeight += weight;
-                        }
-                    }
-                }
+                    // ----------------------------------------------------
+                    // Weight the centroid by mask confidence.
+                    //
+                    // This is better than simply averaging all pixels
+                    // above the threshold.
+                    // ----------------------------------------------------
 
-                // If we processed the maximum Y row and found data, stop scanning lower
-                if (targetY != -1)
-                {
-                    break;
+                    double weight = maskValue;
+
+                    sumX += x * weight;
+                    sumY += y * weight;
+                    totalWeight += weight;
                 }
             }
 
-            if (totalWeight <= 0.0 || targetY == -1)
+            if (totalWeight <= 0.0)
             {
                 return default;
             }
 
-            // 4. Convert mask-space coordinates back to normalized YOLO space
-            float centerX = (float)((sumX / totalWeight + 0.5) / maskWidth);
-            float centerY = (float)((targetY + 0.5) / maskHeight);
+            // ------------------------------------------------------------
+            // 4. Convert mask-space center to normalized YOLO coordinates.
+            //
+            // +0.5 means we're using the pixel center.
+            // ------------------------------------------------------------
+
+            float centerX =
+                (float)((sumX / totalWeight + 0.5) / maskWidth);
+
+            float centerY =
+                (float)((sumY / totalWeight + 0.5) / maskHeight);
 
             valid = true;
+
             return new Vector2(centerX, centerY);
         }
+
+        //private Vector2 CalculateMaskTopCenter(Detection detection, ReadOnlySpan<float> output1, int maskChannels, int maskHeight, int maskWidth, float threshold, out bool valid)
+        //{
+        //    valid = false;
+        //    if (maskChannels <= 0 || maskHeight <= 0 || maskWidth <= 0) return default;
+
+        //    const int MASK_COEFFS = 32;
+        //    if (maskChannels != MASK_COEFFS)
+        //    {
+        //        Debug.LogWarning($"Unexpected mask channel count: {maskChannels}. Expected {MASK_COEFFS}.");
+        //        return default;
+        //    }
+
+        //    // 1. Get detection mask coefficients
+        //    var detectionData = output0Transposed
+        //        .AsReadOnlySpan()
+        //        .Slice(detection.anchorId * output0Shape.y, output0Shape.y);
+        //    var maskCoefficients = detectionData[^MASK_COEFFS..];
+
+        //    // 2. Convert bounding box to mask-space coordinates
+        //    float boxMinX = Mathf.Clamp01(detection.rect.xMin);
+        //    float boxMaxX = Mathf.Clamp01(detection.rect.xMax);
+        //    float boxMinY = Mathf.Clamp01(detection.rect.yMin);
+        //    float boxMaxY = Mathf.Clamp01(detection.rect.yMax);
+
+        //    int minX = Mathf.Clamp(Mathf.FloorToInt(boxMinX * maskWidth), 0, maskWidth - 1);
+        //    int maxX = Mathf.Clamp(Mathf.CeilToInt(boxMaxX * maskWidth), minX + 1, maskWidth);
+        //    int minY = Mathf.Clamp(Mathf.FloorToInt(boxMinY * maskHeight), 0, maskHeight - 1);
+        //    int maxY = Mathf.Clamp(Mathf.CeilToInt(boxMaxY * maskHeight), minY + 1, maskHeight);
+
+        //    // 3. Scan row by row from top to bottom (Highest Y down to Lowest Y)
+        //    double sumX = 0.0;
+        //    double totalWeight = 0.0;
+        //    int targetY = -1;
+        //    int pixels = maskHeight * maskWidth;
+
+        //    // Change: Loop backwards from maxY - 1 down to minY
+        //    for (int y = minY; y < maxY; y++)
+        //    {
+        //        for (int x = minX; x < maxX; x++)
+        //        {
+        //            float maskValue = 0f;
+        //            for (int c = 0; c < MASK_COEFFS; c++)
+        //            {
+        //                int protoIndex = (c * pixels) + (y * maskWidth) + x;
+        //                maskValue += maskCoefficients[c] * output1[protoIndex];
+        //            }
+
+        //            // Sigmoid activation
+        //            maskValue = 1f / (1f + Mathf.Exp(-maskValue));
+
+        //            if (maskValue >= threshold)
+        //            {
+        //                // Found the highest row (maximum Y) containing valid mask pixels
+        //                if (targetY == -1)
+        //                {
+        //                    targetY = y;
+        //                }
+
+        //                if (y == targetY)
+        //                {
+        //                    double weight = maskValue;
+        //                    sumX += x * weight;
+        //                    totalWeight += weight;
+        //                }
+        //            }
+        //        }
+
+        //        // If we processed the maximum Y row and found data, stop scanning lower
+        //        if (targetY != -1)
+        //        {
+        //            break;
+        //        }
+        //    }
+
+        //    if (totalWeight <= 0.0 || targetY == -1)
+        //    {
+        //        return default;
+        //    }
+
+        //    // 4. Convert mask-space coordinates back to normalized YOLO space
+        //    float centerX = (float)((sumX / totalWeight + 0.5) / maskWidth);
+        //    float centerY = (float)((targetY + 0.5) / maskHeight);
+
+        //    valid = true;
+        //    return new Vector2(centerX, centerY);
+        //}
 
         private void EnsureDynamicInputs(Texture texture)
         {
