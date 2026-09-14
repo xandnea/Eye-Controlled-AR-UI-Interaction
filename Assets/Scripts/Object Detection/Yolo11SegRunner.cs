@@ -468,6 +468,7 @@ public sealed class Yolo11SegRunner : MonoBehaviour
         {
             Yolo11Seg.Detection detection = detections[i];
             string className = labels[detection.label];
+            float confidence = detection.probability;
 
             if (!detection.hasMaskCenter)
             {
@@ -505,7 +506,7 @@ public sealed class Yolo11SegRunner : MonoBehaviour
                 ObjectDetectionDebug.Log(
                     ObjectDetectionLogCategory.Depth,
                     $"Detection[{i}] | class={className} " +
-                    $"confidence={detection.probability:F3} " +
+                    $"confidence={confidence:F3} " +
                     $"maskCenter={maskCenter} detectedViewport={detectedViewport} " +
                     $"depthViewport={depthViewport} no depth hit.",
                     this
@@ -516,7 +517,7 @@ public sealed class Yolo11SegRunner : MonoBehaviour
             ObjectDetectionDebug.Log(
                 ObjectDetectionLogCategory.Depth,
                 $"Detection[{i}] | class={className} " +
-                $"confidence={detection.probability:F3} maskCenter={maskCenter} " +
+                $"confidence={confidence:F3} maskCenter={maskCenter} " +
                 $"detectedViewport={detectedViewport} depthViewport={depthViewport} " +
                 $"depth={depth:F3}m world={worldPosition}",
                 this
@@ -527,7 +528,8 @@ public sealed class Yolo11SegRunner : MonoBehaviour
                 depth,
                 worldPosition,
                 i,
-                className
+                className,
+                confidence
             );
         }
     }

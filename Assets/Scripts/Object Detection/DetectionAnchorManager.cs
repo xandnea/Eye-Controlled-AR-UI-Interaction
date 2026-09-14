@@ -13,6 +13,10 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     [SerializeField] private ARAnchorManager anchorManager;
     [SerializeField] private Camera arCamera;
 
+    [Header("Interaction")]
+    [SerializeField]
+    private GazeInteractionManager gazeInteractionManager;
+
     [Header("Visualization")]
     [SerializeField] private GameObject anchorPrefab;
 
@@ -22,29 +26,11 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     private float anchorScale = 1f;
 
     [SerializeField]
-    [Range(-5f, 5f)]
-    [Tooltip("Speed of anchor rotation, can be set to spin left, right, or not at all.")]
-    private float anchorRotationSpeed = 0f;
-
-    [SerializeField]
     [Tooltip("World placement offset expressed along the AR camera's local right/up/forward axes.")]
     private Vector3 anchorOffset;
 
     private readonly List<ARAnchor> activeAnchors = new();
     private readonly List<GameObject> activeVisuals = new();
-
-    private void Update()
-    {
-        float rotationStep = anchorRotationSpeed * 50f * Time.deltaTime;
-        foreach (GameObject visual in activeVisuals)
-        {
-            if (visual != null)
-            {
-                visual.transform.Rotate(0f, 0f, rotationStep, Space.Self);
-            }
-        }
-
-    }
 
     /// <summary>
     /// Validates serialized AR dependencies before the component begins processing detections.
@@ -59,6 +45,18 @@ public sealed class DetectionAnchorManager : MonoBehaviour
             ObjectDetectionDebug.LogError(
                 ObjectDetectionLogCategory.Lifecycle,
                 "ARAnchorManager is not assigned and could not be found in the scene.",
+                this
+            );
+        }
+
+        if (gazeInteractionManager == null)
+            gazeInteractionManager = FindFirstObjectByType<GazeInteractionManager>();
+
+        if (gazeInteractionManager == null)
+        {
+            Debug.LogError(
+                "[DetectionAnchorManager] GazeInteractionManager is not assigned " +
+                "and could not be found in the scene.",
                 this
             );
         }
@@ -111,6 +109,12 @@ public sealed class DetectionAnchorManager : MonoBehaviour
         }
 
         activeAnchors.Clear();
+        activeVisuals.Clear();
+
+        if (gazeInteractionManager != null)
+        {
+            gazeInteractionManager.ClearAnchors();
+        }
     }
 
     /// <summary>
@@ -128,7 +132,8 @@ public sealed class DetectionAnchorManager : MonoBehaviour
         float depthMeters,
         Vector3 worldPosition,
         int detectionIndex,
-        string className)
+        string className,
+        float confidence)
     {
         if (anchorManager == null)
         {
@@ -166,13 +171,13 @@ public sealed class DetectionAnchorManager : MonoBehaviour
 
         ObjectDetectionDebug.Log(
             ObjectDetectionLogCategory.Anchors,
-            $"Initiating anchor creation | detection={detectionIndex} class={className} " +
+            $"Initiating anchor creation | detection={detectionIndex} class={className} confidence{confidence:F3}%" +
             $"viewport={viewportCenter} depth={depthMeters:F3}m " +
             $"origWorld={worldPosition} shiftedWorld={shiftedPosition} offset={anchorOffset}",
             this
         );
 
-        CreateAnchorAsync(pose, detectionIndex, className);
+        CreateAnchorAsync(pose, detectionIndex, className, confidence);
     }
 
     /// <summary>
@@ -184,7 +189,8 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     private async void CreateAnchorAsync(
         Pose pose,
         int detectionIndex,
-        string className)
+        string className,
+        float confidence)
     {
         if (anchorManager == null)
             return;
@@ -232,7 +238,7 @@ public sealed class DetectionAnchorManager : MonoBehaviour
                 this
             );
 
-            CreateAnchorVisual(anchor, detectionIndex, className);
+            CreateAnchorVisual(anchor, detectionIndex, className, confidence);
         }
         catch (System.Exception exception)
         {
@@ -267,7 +273,8 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     private void CreateAnchorVisual(
         ARAnchor anchor,
         int detectionIndex,
-        string className)
+        string className,
+        float confidence)
     {
         if (anchorPrefab == null)
         {
@@ -281,11 +288,15 @@ public sealed class DetectionAnchorManager : MonoBehaviour
 
         GameObject visual = Instantiate(anchorPrefab, anchor.transform, false);
         activeVisuals.Add(visual);
+
         visual.name = $"DetectionVisual_{detectionIndex}_{className}";
 
         // Preserve the prefab's authored local rotation.
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale = anchorPrefab.transform.localScale * anchorScale;
+
+        if (gazeInteractionManager != null)
+            gazeInteractionManager.RegisterAnchor(visual, className, confidence);
 
         ObjectDetectionDebug.Log(
             ObjectDetectionLogCategory.AnchorVisuals,
