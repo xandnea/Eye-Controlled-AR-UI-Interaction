@@ -9,6 +9,7 @@
     }
   ],
   "dependencies": {
+    "com.gilzoide.lottie-player": "https://github.com/gilzoide/unity-lottie-player.git#1.1.1",
     "com.github.asus4.onnxruntime": "0.4.8",
     "com.github.asus4.onnxruntime-extensions": "0.4.8",
     "com.github.asus4.onnxruntime-genai": "0.4.8",

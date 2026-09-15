@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Text;
+using System.Collections.Generic;
 using Microsoft.ML.OnnxRuntime.Examples;
 using Microsoft.ML.OnnxRuntime.Unity;
 using TextureSource;
@@ -32,6 +33,10 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     [Header("AR Dependencies")]
     [SerializeField] private DepthSampler depthSampler;
     [SerializeField] private DetectionAnchorManager detectionAnchorManager;
+    [SerializeField] private ScanAnimationOverlayController scanAnimationOverlay;
+
+    [Header("Scan Presentation")]
+    [SerializeField, Min(0f)] private float minimumScanOverlayTime = 1.5f;
 
     [Header("Detection Model")]
     [SerializeField] private OrtAsset model;
@@ -68,6 +73,19 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     private Image[] detectionBoxOutlines;
     private Texture previousSegmentationTexture;
     private readonly StringBuilder stringBuilder = new();
+    private Coroutine scanCoroutine;
+    private int scanRequestId;
+    
+    private struct PendingAnchor
+    {
+        public Vector2 viewportPoint;
+        public float depthMeters;
+        public Vector3 worldPosition;
+
+        public int detectionIndex;
+        public string className;
+        public float confidence;
+    }
 
     /// <summary>
     /// Registers the camera texture listener, loads the ONNX model,
@@ -240,20 +258,78 @@ public sealed class Yolo11SegRunner : MonoBehaviour
             return;
         }
 
+        scanRequestId++;
+
+        if (scanCoroutine != null)
+            StopCoroutine(scanCoroutine);
+
+        scanCoroutine = StartCoroutine(ScanRoutine(scanRequestId));
+    }
+
+    private IEnumerator ScanRoutine(int requestId)
+    {
         ObjectDetectionDebug.Log(
             ObjectDetectionLogCategory.Yolo,
             $"Scan started | texture={latestTexture.width}x{latestTexture.height}",
             this
         );
 
+        float scanStartTime = Time.unscaledTime;
+
+        if (scanAnimationOverlay != null)
+            scanAnimationOverlay.ShowLooping();
+
+        // Let the overlay render before synchronous inference blocks
+        // the Unity main thread.
+        yield return null;
+
+        List<PendingAnchor> pendingAnchors = RunInference(latestTexture);
+
+        if (requestId != scanRequestId)
+            yield break;
+
+        // YOLO is usually much faster than the scan animation.
+        // Keep the animation visible long enough to communicate scanning.
+        float elapsed = Time.unscaledTime - scanStartTime;
+        float remainingOverlayTime = minimumScanOverlayTime - elapsed;
+
+        if (remainingOverlayTime > 0f)
+            yield return new WaitForSecondsRealtime(remainingOverlayTime);
+
+        if (requestId != scanRequestId)
+            yield break;
+
         detectionAnchorManager.ClearAnchors();
-        RunInference(latestTexture);
+
+        if (scanAnimationOverlay != null)
+            scanAnimationOverlay.StopAndHide();
+
+        // Allow the normal AR view to render before creating visuals.
+        yield return null;
+
+        if (requestId != scanRequestId)
+            yield break;
+
+        foreach (PendingAnchor result in pendingAnchors)
+        {
+            detectionAnchorManager.CreateAnchor(
+                result.viewportPoint,
+                result.depthMeters,
+                result.worldPosition,
+                result.detectionIndex,
+                result.className,
+                result.confidence
+            );
+        }
 
         ObjectDetectionDebug.Log(
             ObjectDetectionLogCategory.Yolo,
-            $"Scan complete | detections={inference.Detections.Length}",
+            $"Scan complete | detections={inference.Detections.Length} " +
+            $"anchors={pendingAnchors.Count}",
             this
         );
+
+        scanCoroutine = null;
     }
 
     /// <summary>
@@ -261,7 +337,7 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     /// segmentation, depth, and anchor updates.
     /// </summary>
     /// <param name="texture">Camera texture to process.</param>
-    private void RunInference(Texture texture)
+    private List<PendingAnchor> RunInference(Texture texture)
     {
         inference.Run(texture);
 
@@ -269,7 +345,8 @@ public sealed class Yolo11SegRunner : MonoBehaviour
 
         UpdateDetectionBoxes(detections);
         UpdateSegmentationOutput();
-        DetectDepth(detections);
+
+        return CollectAnchorResults(detections);
     }
 
     /// <summary>
@@ -453,20 +530,19 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     }
 
     /// <summary>
-    /// Samples AR depth at each detection's mask center and creates an AR anchor
-    /// when a valid depth hit is available. Viewport coordinates close to an edge
-    /// are clamped inward before querying ARCore so detections are not discarded
-    /// merely because the original mask center lies in an unsupported depth border.
+    /// ...
     /// </summary>
-    /// <param name="detections">YOLO detections produced by the current inference pass.</param>
-    private void DetectDepth(
-        ReadOnlySpan<Yolo11Seg.Detection> detections)
+    /// <param...</param>
+    private List<PendingAnchor> CollectAnchorResults(
+    ReadOnlySpan<Yolo11Seg.Detection> detections)
     {
+        var results = new List<PendingAnchor>();
         var labels = inference.labelNames;
 
         for (int i = 0; i < detections.Length; i++)
         {
             Yolo11Seg.Detection detection = detections[i];
+
             string className = labels[detection.label];
             float confidence = detection.probability;
 
@@ -523,15 +599,19 @@ public sealed class Yolo11SegRunner : MonoBehaviour
                 this
             );
 
-            detectionAnchorManager.CreateAnchor(
-                depthViewport,
-                depth,
-                worldPosition,
-                i,
-                className,
-                confidence
-            );
+            results.Add(new PendingAnchor
+            {
+                viewportPoint = detectedViewport,
+                depthMeters = depth,
+                worldPosition = worldPosition,
+
+                detectionIndex = i,
+                className = className,
+                confidence = confidence
+            });
         }
+
+        return results;
     }
 
     /// <summary>

@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.gilzoide.lottie-player": {
+      "version": "https://github.com/gilzoide/unity-lottie-player.git#1.1.1",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "405223bfd248c57a58d6e17979d5d732aa2392fe"
+    },
     "com.github.asus4.onnxruntime": {
       "version": "0.4.8",
       "depth": 0,
