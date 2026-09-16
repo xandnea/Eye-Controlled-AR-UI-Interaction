@@ -27,6 +27,10 @@ public sealed class GazeInteractionManager : MonoBehaviour
     [SerializeField] private Image cursorImage;
     [SerializeField] private bool cursorHidden = true;
     [SerializeField, Range(0f, 1f)] private float cursorAlpha = 1f;
+    [SerializeField, Range(0.5f, 2f)] private float cursorScale = 1f;
+
+    private Vector3 cursorBaseScale;
+    private bool cursorBaseScaleInitialized;
 
     [Header("Touch Inspection")]
     [SerializeField] private bool touchInspectionEnabled = false;
@@ -47,6 +51,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
     private GazeUIButton currentUIButton;
     private float dwellTimer;
     private bool dwellTriggered;
+
+    private bool gazeInteractionEnabled = true;
 
     private AnchorData inspectedAnchor;
     private Coroutine inspectionCoroutine;
@@ -78,8 +84,15 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     private void Start()
     {
+        if (gazeCursor != null)
+        {
+            cursorBaseScale = gazeCursor.localScale;
+            cursorBaseScaleInitialized = true;
+        }
+
         SetCursorHidden(cursorHidden);
         SetCursorAlpha(cursorAlpha);
+        SetCursorScale(cursorScale);
     }
 
     private void OnDisable()
@@ -106,8 +119,12 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     private void UpdateGazeInteraction()
     {
-        if (gazeCursor == null || arCamera == null)
+        if (!gazeInteractionEnabled ||
+        gazeCursor == null ||
+        arCamera == null)
+        {
             return;
+        }
 
         Vector2 gazeScreenPosition = GetGazeCursorScreenPosition();
 
@@ -230,6 +247,32 @@ public sealed class GazeInteractionManager : MonoBehaviour
         }
     }
 
+    public void SetGazeInteractionEnabled(bool enabled)
+    {
+        if (gazeInteractionEnabled == enabled)
+            return;
+
+        gazeInteractionEnabled = enabled;
+
+        if (!enabled)
+            ResetGazeInteractionState();
+    }
+
+    private void ResetGazeInteractionState()
+    {
+        if (currentUIButton != null)
+            currentUIButton.ResetSelectionVisuals();
+        else if (currentTarget != null)
+            HideSelectionIndicator(currentTarget);
+
+        currentUIButton = null;
+        currentTarget = null;
+        dwellTimer = 0f;
+        dwellTriggered = false;
+
+        CancelInspectionClose();
+    }
+
     // ============================================================
     // AR ANCHOR SELECTION INDICATOR
     // ============================================================
@@ -304,6 +347,22 @@ public sealed class GazeInteractionManager : MonoBehaviour
         Color color = cursorImage.color;
         color.a = cursorAlpha;
         cursorImage.color = color;
+    }
+
+    public void SetCursorScale(float scale)
+    {
+        cursorScale = Mathf.Clamp(scale, 0.5f, 2f);
+
+        if (gazeCursor == null)
+            return;
+
+        if (!cursorBaseScaleInitialized)
+        {
+            cursorBaseScale = gazeCursor.localScale;
+            cursorBaseScaleInitialized = true;
+        }
+
+        gazeCursor.localScale = cursorBaseScale * cursorScale;
     }
 
     // ============================================================

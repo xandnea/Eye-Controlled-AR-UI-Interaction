@@ -109,6 +109,11 @@ public sealed class GazeInteractionSettingsUI : MonoBehaviour
         );
     }
 
+    public void SetCursorScale(float scale)
+    {
+        gazeInteractionManager.SetCursorScale(scale);
+    }
+
 
     public void SetTouchInspection(bool enabled)
     {

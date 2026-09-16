@@ -1614,15 +1614,15 @@ MonoBehaviour:
   calibrationInstructionsUI: {fileID: 0}
   horizontalPadding: 0
   verticalPadding: 0
-  preCalibrationCountdownSeconds: 3
+  preCalibrationCountdownSeconds: 5
   settleTimePerTarget: 0.5
-  sampleTimePerTarget: 1.5
+  sampleTimePerTarget: 1.75
   minimumSamplesPerTarget: 15
   sampleTrimFraction: 0.2
-  minimumAdjacentGazeDistance: 0.035
+  minimumAdjacentGazeDistance: 0.03
   activeColor: {r: 0, g: 1, b: 0, a: 1}
-  gazeFilterSpeed: 30
-  gazeDeadzonePixels: 15
+  gazeFilterSpeed: 25
+  gazeDeadzonePixels: 7
 --- !u!1 &5608380636137761856
 GameObject:
   m_ObjectHideFlags: 0

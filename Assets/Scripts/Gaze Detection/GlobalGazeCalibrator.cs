@@ -33,6 +33,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     [SerializeField] private RectTransform cursorIndicator;
     [SerializeField] private TextMeshProUGUI statusInstructionsText;
     [SerializeField] private CalibrationInstructionsUI calibrationInstructionsUI;
+    [SerializeField] private GazeInteractionManager gazeInteractionManager;
 
     [Header("9-Point Calibration")]
     [SerializeField, Min(0f)] private float horizontalPadding = 60f;
@@ -48,6 +49,10 @@ public class GlobalGazeCalibrator : MonoBehaviour
     [SerializeField, Range(0.25f, 3f)] private float sampleTimePerTarget = 1.0f;
 
     [SerializeField, Min(5)] private int minimumSamplesPerTarget = 10;
+
+    [Tooltip("How long to show the retry message when a calibration point does not collect enough samples.")]
+    [SerializeField, Range(0.25f, 2f)] private float retryMessageDuration = 0.75f;
+
     [SerializeField, Range(0f, 0.4f)] private float sampleTrimFraction = 0.2f;
 
     [Tooltip(
@@ -168,6 +173,8 @@ public class GlobalGazeCalibrator : MonoBehaviour
             _calibrationRoutine = null;
         }
 
+        RestoreGazeInteraction();
+
         if (calibrationInstructionsUI != null)
             calibrationInstructionsUI.Hide();
     }
@@ -186,6 +193,9 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         if (_calibrationRoutine != null)
             StopCoroutine(_calibrationRoutine);
+
+        if (gazeInteractionManager != null)
+            gazeInteractionManager.SetGazeInteractionEnabled(false);
 
         if (calibrationInstructionsUI != null)
             calibrationInstructionsUI.ShowGlobal();
@@ -209,6 +219,12 @@ public class GlobalGazeCalibrator : MonoBehaviour
     {
         get => gazeDeadzonePixels;
         set => gazeDeadzonePixels = Mathf.Clamp(value, MinGazeDeadzonePixels, MaxGazeDeadzonePixels);
+    }
+
+    private void RestoreGazeInteraction()
+    {
+        if (gazeInteractionManager != null)
+            gazeInteractionManager.SetGazeInteractionEnabled(true);
     }
 
     public void ResetCursorFilter()
@@ -278,6 +294,19 @@ public class GlobalGazeCalibrator : MonoBehaviour
                     Debug.LogWarning(
                         $"[GazeCal] {CalibrationLabels[i]} failed: insufficient valid samples. " +
                         "Retrying the same calibration target.");
+
+                    if (statusInstructionsText != null)
+                    {
+                        statusInstructionsText.color = Color.red;
+                        statusInstructionsText.text =
+                            "Not enough gaze samples.\nKeep looking at this dot — retrying...";
+
+                        statusInstructionsText.gameObject.SetActive(true);
+
+                        yield return new WaitForSecondsRealtime(retryMessageDuration);
+
+                        statusInstructionsText.gameObject.SetActive(false);
+                    }
                 }
             }
 
@@ -316,6 +345,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
             if (calibrationInstructionsUI != null)
                 calibrationInstructionsUI.Hide();
 
+            RestoreGazeInteraction();
             _calibrationRoutine = null;
             yield break;
         }
@@ -336,6 +366,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
             if (calibrationInstructionsUI != null)
                 calibrationInstructionsUI.Hide();
 
+            RestoreGazeInteraction();
             _calibrationRoutine = null;
             yield break;
         }
@@ -383,6 +414,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
         if (calibrationInstructionsUI != null)
             calibrationInstructionsUI.Hide();
 
+        RestoreGazeInteraction();
         _calibrationRoutine = null;
     }
 

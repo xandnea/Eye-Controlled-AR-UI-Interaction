@@ -232,7 +232,7 @@ GameObject:
   - component: {fileID: 8048048252887897363}
   - component: {fileID: 1529050803236490137}
   - component: {fileID: 6843990887753848114}
-  m_Layer: 5
+  m_Layer: 7
   m_Name: LabelText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -369,7 +369,7 @@ GameObject:
   - component: {fileID: 8604014999957412204}
   - component: {fileID: 5369074514166577087}
   - component: {fileID: 4502531911597230385}
-  m_Layer: 5
+  m_Layer: 7
   m_Name: ConfText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -678,7 +678,7 @@ GameObject:
   - component: {fileID: 3610133442244548989}
   - component: {fileID: 5995355401943959317}
   - component: {fileID: 5775047439614270252}
-  m_Layer: 5
+  m_Layer: 7
   m_Name: Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
