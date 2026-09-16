@@ -705,6 +705,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8ef17e374f620417d846371eb39eead3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Gilzoide.LottiePlayer::Gilzoide.LottiePlayer.ImageLottiePlayer
+--- !u!1 &388066921 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4572180553179577016, guid: 8c180f7de0847e544ae916bd4ca53d7a, type: 3}
+  m_PrefabInstance: {fileID: 388066917}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &388066924
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -827,17 +832,6 @@ MonoBehaviour:
   m_PointerBehavior: 0
   m_CursorLockBehavior: 0
   m_ScrollDeltaPerTick: 6
---- !u!114 &461280599 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 953656536807471765, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
-  m_PrefabInstance: {fileID: 8627954122931377168}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!1001 &471554529
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -994,7 +988,7 @@ MonoBehaviour:
   calibrationBackground: {fileID: 853055376}
   calibrationModeRoot: {fileID: 8627954122931377169}
   faceLandmarkerRunner: {fileID: 1064799469}
-  scanButton: {fileID: 1676732848}
+  scanButton: {fileID: 388066921}
 --- !u!114 &723980763 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5647692896317820194, guid: c32e73fd5b47df34fbb27330b9d29129, type: 3}
@@ -1302,7 +1296,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5863551166241275732, guid: 8c180f7de0847e544ae916bd4ca53d7a, type: 3}
   m_PrefabInstance: {fileID: 388066917}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 388066921}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
@@ -1328,17 +1322,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3aeffe9a2d89f0ea4aa716347e0529d6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &1022957027 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
-  m_PrefabInstance: {fileID: 3779745678428037925}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ebfa16b991e01d24493bdca8fdb0d954, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!114 &1064799469 stripped
@@ -1473,6 +1456,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 471554531}
     - target: {fileID: 5490429997339351929, guid: 230baf838e4ecb7449abd5055a6c8a72, type: 3}
+      propertyPath: minimumScanOverlayTime
+      value: 0.75
+      objectReference: {fileID: 0}
+    - target: {fileID: 5490429997339351929, guid: 230baf838e4ecb7449abd5055a6c8a72, type: 3}
       propertyPath: options.maxDetectionCount
       value: 10
       objectReference: {fileID: 0}
@@ -1594,17 +1581,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 4105417035364561126, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
   m_PrefabInstance: {fileID: 8627954122931377168}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1534850688 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
-  m_PrefabInstance: {fileID: 3779745678428037925}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bce61d2d4fd9a1648ade9816475e6ff0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &1631299496 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5490429997339351929, guid: 230baf838e4ecb7449abd5055a6c8a72, type: 3}
@@ -1651,11 +1627,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!1 &1676732848 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7850142184726695483, guid: 8c180f7de0847e544ae916bd4ca53d7a, type: 3}
-  m_PrefabInstance: {fileID: 388066917}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1713359382 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3594321331819538104, guid: 8c180f7de0847e544ae916bd4ca53d7a, type: 3}
@@ -1731,7 +1702,8 @@ MonoBehaviour:
   cursorHidden: 0
   cursorAlpha: 1
   touchInspectionEnabled: 0
-  dwellDuration: 0.75
+  dwellDuration: 0.5
+  inspectionExitGraceDuration: 0.2
   scanButton: {fileID: 959669649}
   scanOuterCircle: {fileID: 388066919}
   scanSelectedScale: 1.5
@@ -2072,33 +2044,57 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: calibrationDuration
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: faceLandmarkerRunner
       value: 
       objectReference: {fileID: 1064799469}
     - target: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: statusInstructionsText
       value: 
-      objectReference: {fileID: 461280599}
+      objectReference: {fileID: 8627954122931377173}
+    - target: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: calibrationInstructionsUI
+      value: 
+      objectReference: {fileID: 8627954122931377174}
+    - target: {fileID: 2163362289525247698, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: preCalibrationCountdownSeconds
+      value: 5
+      objectReference: {fileID: 0}
     - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: calibrationArea
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 8627954122931377172}
     - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: cursorIndicator
       value: 
       objectReference: {fileID: 1675407304}
+    - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: gazeFilterSpeed
+      value: 35
+      objectReference: {fileID: 0}
     - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: calibrationTarget
       value: 
       objectReference: {fileID: 401821414}
     - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: gazeDeadzonePixels
-      value: 12
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: statusInstructionsText
       value: 
-      objectReference: {fileID: 461280599}
+      objectReference: {fileID: 8627954122931377173}
+    - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: calibrationInstructionsUI
+      value: 
+      objectReference: {fileID: 8627954122931377174}
+    - target: {fileID: 2983636104637976845, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+      propertyPath: preCalibrationCountdownSeconds
+      value: 5
+      objectReference: {fileID: 0}
     - target: {fileID: 4102999310319940244, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
       propertyPath: faceLandmarkerRunner
       value: 
@@ -2152,6 +2148,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+--- !u!114 &3779745678428037926 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3027845086595051957, guid: beca96f3814dd7447b30b1d33525258c, type: 3}
+  m_PrefabInstance: {fileID: 3779745678428037925}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c115c18d071794d4e95beab181a3aec5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GazeCalibrationManager
 --- !u!1001 &4236765547559904474
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2647,6 +2654,10 @@ PrefabInstance:
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
       value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
+    - target: {fileID: 2746602224723929352, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2923758196571942805, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
       value: 1
@@ -2711,6 +2722,10 @@ PrefabInstance:
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
       value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
+    - target: {fileID: 3171943481767859059, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3229989247679308857, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
       value: 1
@@ -2740,8 +2755,16 @@ PrefabInstance:
       value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
     - target: {fileID: 3764026250503103938, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3764026250503103938, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3764026250503103938, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4105417035364561126, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_IsActive
@@ -2870,7 +2893,15 @@ PrefabInstance:
     - target: {fileID: 6254220220017646612, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
-      objectReference: {fileID: 1534850688}
+      objectReference: {fileID: 3779745678428037926}
+    - target: {fileID: 6254220220017646612, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: RunGlobalCalibration
+      objectReference: {fileID: 0}
+    - target: {fileID: 6254220220017646612, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: GazeCalibrationManager, Assembly-CSharp
+      objectReference: {fileID: 0}
     - target: {fileID: 6290759262567506776, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -2878,7 +2909,15 @@ PrefabInstance:
     - target: {fileID: 6556550705640623657, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
-      objectReference: {fileID: 1022957027}
+      objectReference: {fileID: 3779745678428037926}
+    - target: {fileID: 6556550705640623657, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: RunLocalCalibration
+      objectReference: {fileID: 0}
+    - target: {fileID: 6556550705640623657, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: GazeCalibrationManager, Assembly-CSharp
+      objectReference: {fileID: 0}
     - target: {fileID: 6566031527791689176, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_Sprite
       value: 
@@ -2966,6 +3005,10 @@ PrefabInstance:
     - target: {fileID: 7364127794922678866, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
       value: UnityEngine.Object, UnityEngine
+      objectReference: {fileID: 0}
+    - target: {fileID: 7396346341455284806, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7396346341455284806, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
       propertyPath: m_AnchorMax.y
@@ -3138,6 +3181,33 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 6290759262567506776, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
   m_PrefabInstance: {fileID: 8627954122931377168}
   m_PrefabAsset: {fileID: 0}
+--- !u!224 &8627954122931377172 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 4500956707922937750, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+  m_PrefabInstance: {fileID: 8627954122931377168}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &8627954122931377173 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3586695087658276667, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+  m_PrefabInstance: {fileID: 8627954122931377168}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
+--- !u!114 &8627954122931377174 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5784092118303414804, guid: 539e2c080e9397f41970cc3fed9e796f, type: 3}
+  m_PrefabInstance: {fileID: 8627954122931377168}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ecbc25669ebc4046a80ef07749e4faa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CalibrationInstructionsUI
 --- !u!1001 &8987030357336129653
 PrefabInstance:
   m_ObjectHideFlags: 0

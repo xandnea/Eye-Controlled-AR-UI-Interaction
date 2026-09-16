@@ -32,6 +32,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     [SerializeField] private RectTransform calibrationTarget;
     [SerializeField] private RectTransform cursorIndicator;
     [SerializeField] private TextMeshProUGUI statusInstructionsText;
+    [SerializeField] private CalibrationInstructionsUI calibrationInstructionsUI;
 
     [Header("9-Point Calibration")]
     [SerializeField, Min(0f)] private float horizontalPadding = 60f;
@@ -107,6 +108,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     private GazeDebugController _debugController;
     private Coroutine _calibrationRoutine;
     private Image _targetImage;
+    public bool IsRunning => _calibrationRoutine != null;
 
     private bool _isCalibrated;
     private bool _filterInitialized;
@@ -165,6 +167,9 @@ public class GlobalGazeCalibrator : MonoBehaviour
             StopCoroutine(_calibrationRoutine);
             _calibrationRoutine = null;
         }
+
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.Hide();
     }
 
     /// <summary>
@@ -181,6 +186,9 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         if (_calibrationRoutine != null)
             StopCoroutine(_calibrationRoutine);
+
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.ShowGlobal();
 
         _calibrationRoutine = StartCoroutine(CalibrationSequence());
     }
@@ -243,28 +251,34 @@ public class GlobalGazeCalibrator : MonoBehaviour
             Vector2 normalizedScreen =
                 LocalToNormalized(calibrationArea.rect, targetLocalPosition);
 
-            yield return new WaitForSeconds(settleTimePerTarget);
-
             Vector2 gazeSample = Vector2.zero;
             Vector2 sampleStdDev = Vector2.zero;
             int sampleCount = 0;
             bool collected = false;
 
-            yield return CollectGazeSample((mean, count, stdDev) =>
+            while (!collected)
             {
-                gazeSample = mean;
-                sampleCount = count;
-                sampleStdDev = stdDev;
-                collected = true;
-            });
+                // Every attempt gets a fresh settle period before sampling.
+                yield return new WaitForSeconds(settleTimePerTarget);
 
-            if (!collected)
-            {
-                Debug.LogWarning(
-                    $"[GazeCal] {CalibrationLabels[i]} failed: insufficient valid samples.");
-                calibrationTarget.gameObject.SetActive(false);
-                _calibrationRoutine = null;
-                yield break;
+                gazeSample = Vector2.zero;
+                sampleStdDev = Vector2.zero;
+                sampleCount = 0;
+
+                yield return CollectGazeSample((mean, count, stdDev) =>
+                {
+                    gazeSample = mean;
+                    sampleCount = count;
+                    sampleStdDev = stdDev;
+                    collected = true;
+                });
+
+                if (!collected)
+                {
+                    Debug.LogWarning(
+                        $"[GazeCal] {CalibrationLabels[i]} failed: insufficient valid samples. " +
+                        "Retrying the same calibration target.");
+                }
             }
 
             DebugLog(
@@ -297,8 +311,10 @@ public class GlobalGazeCalibrator : MonoBehaviour
                     "Global gaze calibration failed.\nPlease try again.";
                 statusInstructionsText.gameObject.SetActive(true);
                 yield return new WaitForSeconds(2f);
-                statusInstructionsText.gameObject.SetActive(false);
             }
+
+            if (calibrationInstructionsUI != null)
+                calibrationInstructionsUI.Hide();
 
             _calibrationRoutine = null;
             yield break;
@@ -315,8 +331,10 @@ public class GlobalGazeCalibrator : MonoBehaviour
                     "Global gaze calibration failed.\nPlease try again.";
                 statusInstructionsText.gameObject.SetActive(true);
                 yield return new WaitForSeconds(2f);
-                statusInstructionsText.gameObject.SetActive(false);
             }
+
+            if (calibrationInstructionsUI != null)
+                calibrationInstructionsUI.Hide();
 
             _calibrationRoutine = null;
             yield break;
@@ -360,8 +378,10 @@ public class GlobalGazeCalibrator : MonoBehaviour
             statusInstructionsText.text = "Global gaze calibration complete.";
             statusInstructionsText.gameObject.SetActive(true);
             yield return new WaitForSeconds(1.5f);
-            statusInstructionsText.gameObject.SetActive(false);
         }
+
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.Hide();
 
         _calibrationRoutine = null;
     }
@@ -374,7 +394,12 @@ public class GlobalGazeCalibrator : MonoBehaviour
     private IEnumerator RunPreCalibrationCountdown()
     {
         if (statusInstructionsText == null)
+        {
+            if (calibrationInstructionsUI != null)
+                calibrationInstructionsUI.HideImages();
+
             yield break;
+        }
 
         statusInstructionsText.color = Color.black;
         statusInstructionsText.gameObject.SetActive(true);
@@ -385,10 +410,15 @@ public class GlobalGazeCalibrator : MonoBehaviour
         {
             statusInstructionsText.text =
                 $"Keep your eyes on the green dot in: {remaining}";
+
             yield return new WaitForSeconds(1f);
         }
 
+        // Countdown is over. Actual calibration begins now.
         statusInstructionsText.gameObject.SetActive(false);
+
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.HideImages();
     }
 
     /// <summary>

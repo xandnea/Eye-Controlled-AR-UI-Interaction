@@ -23,6 +23,7 @@ public class LocalGazeCalibrator : MonoBehaviour
     [SerializeField] private FaceLandmarkerRunner faceLandmarkerRunner;
     [SerializeField] private GazeVisualizer gazeVisualizer;
     [SerializeField] private TextMeshProUGUI statusInstructionsText;
+    [SerializeField] private CalibrationInstructionsUI calibrationInstructionsUI;
 
     [Header("Calibration")]
     [SerializeField] private int preCalibrationCountdownSeconds = 3;
@@ -40,6 +41,7 @@ public class LocalGazeCalibrator : MonoBehaviour
     private GazeDebugController _debugController;
     private Coroutine _calibrationRoutine;
     private bool _isCalibrating;
+    public bool IsRunning => _calibrationRoutine != null;
 
     private void Awake()
     {
@@ -73,6 +75,12 @@ public class LocalGazeCalibrator : MonoBehaviour
         }
 
         _isCalibrating = false;
+
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.Hide();
+
+        if (statusInstructionsText != null)
+            statusInstructionsText.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -86,6 +94,9 @@ public class LocalGazeCalibrator : MonoBehaviour
     {
         if (_calibrationRoutine != null)
             StopCoroutine(_calibrationRoutine);
+
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.ShowLocal();
 
         _calibrationRoutine = StartCoroutine(CalibrationRoutine());
     }
@@ -135,6 +146,10 @@ public class LocalGazeCalibrator : MonoBehaviour
                 statusInstructionsText.text =
                     $"Calibration failed: only {sampleCount} valid samples collected.\n" +
                     "Keep your face visible and try again.";
+
+                statusInstructionsText.gameObject.SetActive(true);
+                yield return new WaitForSeconds(2f);
+                statusInstructionsText.gameObject.SetActive(false);
             }
 
             // Calibration failures should always be visible even with optional
@@ -172,7 +187,10 @@ public class LocalGazeCalibrator : MonoBehaviour
         {
             statusInstructionsText.color = Color.green;
             statusInstructionsText.text = "Local gaze calibration complete.";
+            statusInstructionsText.gameObject.SetActive(true);
+
             yield return new WaitForSeconds(1.5f);
+
             statusInstructionsText.gameObject.SetActive(false);
         }
 
@@ -192,7 +210,12 @@ public class LocalGazeCalibrator : MonoBehaviour
     private IEnumerator RunPreCalibrationCountdown()
     {
         if (statusInstructionsText == null)
+        {
+            if (calibrationInstructionsUI != null)
+                calibrationInstructionsUI.Hide();
+
             yield break;
+        }
 
         statusInstructionsText.color = Color.black;
         statusInstructionsText.gameObject.SetActive(true);
@@ -207,9 +230,9 @@ public class LocalGazeCalibrator : MonoBehaviour
             yield return new WaitForSeconds(1f);
         }
 
-        statusInstructionsText.color = Color.red;
-        statusInstructionsText.text =
-            "Look as far up, down, left, and right as you can. Keep your head still.";
+        // Countdown has finished. Actual eye-range calibration starts now.
+        if (calibrationInstructionsUI != null)
+            calibrationInstructionsUI.Hide();
     }
 
     /// <summary>

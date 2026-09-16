@@ -29,6 +29,7 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     [Header("Dwell")]
     [SerializeField] private float dwellDuration = 1f;
+    [SerializeField] private float inspectionExitGraceDuration = 0.2f;
 
     [Header("Scan Button")]
     [SerializeField] private Button scanButton;
@@ -50,6 +51,7 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     private AnchorData inspectedAnchor;
     private Coroutine inspectionCoroutine;
+    private Coroutine inspectionCloseDelayCoroutine;
 
     private RectTransform scanButtonRect;
     private Vector3 scanButtonBaseScale;
@@ -132,6 +134,14 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
         if (newTarget == null)
             newTarget = FindWorldTarget(gazeScreenPosition);
+
+        // Treat the open inspection panel as part of its AR anchor.
+        if (newTarget == null &&
+            inspectedAnchor != null &&
+            IsGazeOverInspectedPanel(gazeScreenPosition))
+        {
+            newTarget = inspectedAnchor.root;
+        }
 
         if (newTarget != currentTarget)
             OnGazeTargetChanged(newTarget);
@@ -223,8 +233,13 @@ public sealed class GazeInteractionManager : MonoBehaviour
                 HideSelectionIndicator(currentTarget);
         }
 
-        if (inspectedAnchor != null && newTarget != inspectedAnchor.root)
-            CloseInspection();
+        if (inspectedAnchor != null)
+        {
+            if (newTarget == inspectedAnchor.root)
+                CancelInspectionClose();
+            else
+                ScheduleInspectionClose();
+        }
 
         currentTarget = newTarget;
         dwellTimer = 0f;
@@ -507,6 +522,23 @@ public sealed class GazeInteractionManager : MonoBehaviour
         return null;
     }
 
+    private bool IsGazeOverInspectedPanel(Vector2 screenPosition)
+    {
+        if (inspectedAnchor == null ||
+            inspectedAnchor.panel == null ||
+            inspectedAnchor.panelObject == null ||
+            !inspectedAnchor.panelObject.activeInHierarchy)
+        {
+            return false;
+        }
+
+        return RectTransformUtility.RectangleContainsScreenPoint(
+            inspectedAnchor.panel,
+            screenPosition,
+            arCamera
+        );
+    }
+
     // ============================================================
     // IDLE ANCHOR ROTATION
     // ============================================================
@@ -624,6 +656,36 @@ public sealed class GazeInteractionManager : MonoBehaviour
         }
 
         inspectionCoroutine = StartCoroutine(CloseInspectionRoutine(inspectedAnchor));
+    }
+
+    private void ScheduleInspectionClose()
+    {
+        if (inspectionCloseDelayCoroutine != null)
+            return;
+
+        inspectionCloseDelayCoroutine = StartCoroutine(CloseInspectionAfterDelay());
+    }
+
+    private void CancelInspectionClose()
+    {
+        if (inspectionCloseDelayCoroutine == null)
+            return;
+
+        StopCoroutine(inspectionCloseDelayCoroutine);
+        inspectionCloseDelayCoroutine = null;
+    }
+
+    private IEnumerator CloseInspectionAfterDelay()
+    {
+        yield return new WaitForSecondsRealtime(inspectionExitGraceDuration);
+
+        inspectionCloseDelayCoroutine = null;
+
+        if (inspectedAnchor != null &&
+            currentTarget != inspectedAnchor.root)
+        {
+            CloseInspection();
+        }
     }
 
     private IEnumerator CloseInspectionRoutine(AnchorData anchor)

@@ -148,6 +148,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8230088749789769524}
+  - component: {fileID: 3027845086595051957}
   - component: {fileID: 5761586963532227899}
   m_Layer: 0
   m_Name: Gaze Calibration
@@ -175,6 +176,20 @@ Transform:
   - {fileID: 6354548435448980449}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3027845086595051957
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 96799450608994613}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c115c18d071794d4e95beab181a3aec5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GazeCalibrationManager
+  localGazeCalibrator: {fileID: 2163362289525247698}
+  globalGazeCalibrator: {fileID: 2983636104637976845}
 --- !u!114 &5761586963532227899
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1596,6 +1611,7 @@ MonoBehaviour:
   calibrationTarget: {fileID: 0}
   cursorIndicator: {fileID: 0}
   statusInstructionsText: {fileID: 0}
+  calibrationInstructionsUI: {fileID: 0}
   horizontalPadding: 0
   verticalPadding: 0
   preCalibrationCountdownSeconds: 3
@@ -2082,6 +2098,7 @@ MonoBehaviour:
   faceLandmarkerRunner: {fileID: 0}
   gazeVisualizer: {fileID: 4102999310319940244}
   statusInstructionsText: {fileID: 0}
+  calibrationInstructionsUI: {fileID: 0}
   preCalibrationCountdownSeconds: 3
   calibrationDuration: 10
   lowerPercentile: 0.05
