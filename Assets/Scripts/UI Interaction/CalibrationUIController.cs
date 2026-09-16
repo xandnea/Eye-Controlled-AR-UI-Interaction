@@ -6,28 +6,23 @@ public class CalibrationUIController : MonoBehaviour
     [SerializeField] private GameObject calibrationBackground;
     [SerializeField] private GameObject calibrationModeRoot;
 
+    [Header("Canvas Reference")]
+    [SerializeField] private GameObject uiCanvas;
+
+    [Header("Calibration Panels")]
+    [SerializeField] private GameObject interactionSettingsPanel;
+
     [Header("Face Landmarks")]
     [SerializeField]
     private Mediapipe.Unity.Sample.FaceLandmarkDetection.FaceLandmarkerRunner faceLandmarkerRunner;
-
-    [Header("Normal UI")]
-    [SerializeField] private GameObject scanButton;
-
-    [Header("Calibration Background")]
 
     private bool calibrationModeEnabled;
     private bool landmarksEnabled;
 
     private void Start()
     {
-        calibrationModeEnabled = false;
         landmarksEnabled = false;
-
-        if (calibrationBackground != null)
-            calibrationBackground.SetActive(false);
-
-        if (calibrationModeRoot != null)
-            calibrationModeRoot.SetActive(false);
+        SetCalibrationMode(false);
 
         if (faceLandmarkerRunner != null)
             faceLandmarkerRunner.SetLandmarkDrawing(false);
@@ -51,15 +46,10 @@ public class CalibrationUIController : MonoBehaviour
     {
         calibrationModeEnabled = enabled;
 
-        if (calibrationModeRoot != null)
-            calibrationModeRoot.SetActive(enabled);
-
-        if (calibrationBackground != null)
-            calibrationBackground.SetActive(enabled);
-
-        // Normal scanning makes no sense while calibration mirror is open.
-        if (scanButton != null)
-            scanButton.SetActive(!enabled);
+        if (enabled)
+            ShowCalibrationCanvas();
+        else
+            HideCalibrationCanvas();
 
         if (!enabled)
         {
@@ -68,5 +58,28 @@ public class CalibrationUIController : MonoBehaviour
             if (faceLandmarkerRunner != null)
                 faceLandmarkerRunner.SetLandmarkDrawing(false);
         }
+    }
+
+    public void ShowCalibrationCanvas()
+    {
+        if (calibrationModeRoot != null)
+            calibrationModeRoot.SetActive(true);
+
+        if (calibrationBackground != null)
+            calibrationBackground.SetActive(true);
+        uiCanvas.SetActive(false);
+    }
+
+    public void HideCalibrationCanvas()
+    {
+        if (interactionSettingsPanel != null)
+            interactionSettingsPanel.SetActive(false);
+
+        if (calibrationModeRoot != null)
+            calibrationModeRoot.SetActive(false);
+
+        if (calibrationBackground != null)
+            calibrationBackground.SetActive(false);
+        uiCanvas.SetActive(true);
     }
 }
