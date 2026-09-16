@@ -16,8 +16,12 @@ public sealed class GazeInteractionManager : MonoBehaviour
     [SerializeField] private LayerMask worldInteractableLayers;
     [SerializeField] private float maxRayDistance = 10f;
 
-    [Header("UI Interaction")]
-    [SerializeField] private LayerMask uiInteractableLayers;
+    [Header("UI Button Interaction")]
+    [Tooltip("Scale reached by every gaze button using Expand To Outer Circle.")]
+    [SerializeField] private float uiButtonSelectedScale = 1.4f;
+
+    [Tooltip("Time used to return an expanded gaze button to its normal scale before invoking OnClick.")]
+    [SerializeField] private float uiButtonReleaseDuration = 0.12f;
 
     [Header("Cursor Settings")]
     [SerializeField] private Image cursorImage;
@@ -31,12 +35,6 @@ public sealed class GazeInteractionManager : MonoBehaviour
     [SerializeField] private float dwellDuration = 1f;
     [SerializeField] private float inspectionExitGraceDuration = 0.2f;
 
-    [Header("Scan Button")]
-    [SerializeField] private Button scanButton;
-    [SerializeField] private GameObject scanOuterCircle;
-    [SerializeField] private float scanSelectedScale = 1.4f;
-    [SerializeField] private float scanReleaseDuration = 0.12f;
-
     [Header("Anchor Animation")]
     [SerializeField] private float idleSpinSpeed = 25f;
     [SerializeField] private float turnDuration = 0.25f;
@@ -46,16 +44,13 @@ public sealed class GazeInteractionManager : MonoBehaviour
     private readonly List<RaycastResult> uiRaycastResults = new();
 
     private GameObject currentTarget;
+    private GazeUIButton currentUIButton;
     private float dwellTimer;
     private bool dwellTriggered;
 
     private AnchorData inspectedAnchor;
     private Coroutine inspectionCoroutine;
     private Coroutine inspectionCloseDelayCoroutine;
-
-    private RectTransform scanButtonRect;
-    private Vector3 scanButtonBaseScale;
-    private Coroutine scanButtonActivationCoroutine;
 
     private sealed class AnchorData
     {
@@ -85,30 +80,17 @@ public sealed class GazeInteractionManager : MonoBehaviour
     {
         SetCursorHidden(cursorHidden);
         SetCursorAlpha(cursorAlpha);
+    }
 
-        if (scanButton != null)
-        {
-            scanButtonRect = scanButton.GetComponent<RectTransform>();
-            scanButtonBaseScale = scanButtonRect.localScale;
+    private void OnDisable()
+    {
+        if (currentUIButton != null)
+            currentUIButton.ResetSelectionVisuals();
+        else if (currentTarget != null)
+            HideSelectionIndicator(currentTarget);
 
-            // OuterCircle is a sibling of Scan Button under the Scan object.
-            if (scanOuterCircle == null)
-            {
-                Transform outerCircle = scanButton.transform.parent.Find("OuterCircle");
-
-                if (outerCircle != null)
-                    scanOuterCircle = outerCircle.gameObject;
-            }
-        }
-
-        if (scanOuterCircle != null)
-        {
-            scanOuterCircle.SetActive(false);
-        }
-        else
-        {
-            Debug.LogError("[GazeInteraction] Scan OuterCircle could not be found.", this);
-        }
+        currentUIButton = null;
+        CancelInspectionClose();
     }
 
     private void Update()
@@ -129,8 +111,9 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
         Vector2 gazeScreenPosition = GetGazeCursorScreenPosition();
 
-        // UI gets priority over AR objects.
-        GameObject newTarget = FindScanButtonTarget(gazeScreenPosition);
+        // Explicit GazeUIButton components get priority over AR objects.
+        GazeUIButton newUIButton = FindGazeUIButtonTarget(gazeScreenPosition);
+        GameObject newTarget = newUIButton != null ? newUIButton.gameObject : null;
 
         if (newTarget == null)
             newTarget = FindWorldTarget(gazeScreenPosition);
@@ -144,7 +127,7 @@ public sealed class GazeInteractionManager : MonoBehaviour
         }
 
         if (newTarget != currentTarget)
-            OnGazeTargetChanged(newTarget);
+            OnGazeTargetChanged(newTarget, newUIButton);
 
         if (currentTarget == null || dwellTriggered)
             return;
@@ -152,8 +135,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
         dwellTimer += Time.unscaledDeltaTime;
         float progress = dwellDuration > 0f ? Mathf.Clamp01(dwellTimer / dwellDuration) : 1f;
 
-        if (IsScanButtonTarget(currentTarget))
-            SetScanButtonProgress(progress);
+        if (currentUIButton != null)
+            currentUIButton.SetSelectionProgress(progress, uiButtonSelectedScale);
         else
             SetSelectionProgress(currentTarget, progress);
 
@@ -162,9 +145,9 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
         dwellTriggered = true;
 
-        if (IsScanButtonTarget(currentTarget))
+        if (currentUIButton != null)
         {
-            BeginScanButtonActivation();
+            currentUIButton.Activate(uiButtonReleaseDuration);
         }
         else
         {
@@ -189,15 +172,10 @@ public sealed class GazeInteractionManager : MonoBehaviour
         return RectTransformUtility.WorldToScreenPoint(canvasCamera, gazeCursor.position);
     }
 
-    private GameObject FindScanButtonTarget(Vector2 screenPosition)
+    private GazeUIButton FindGazeUIButtonTarget(Vector2 screenPosition)
     {
-        if (scanButton == null ||
-            EventSystem.current == null ||
-            !scanButton.gameObject.activeInHierarchy ||
-            !scanButton.IsInteractable())
-        {
+        if (EventSystem.current == null)
             return null;
-        }
 
         var eventData = new PointerEventData(EventSystem.current)
         {
@@ -209,29 +187,21 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
         foreach (RaycastResult result in uiRaycastResults)
         {
-            Button button = result.gameObject.GetComponentInParent<Button>();
+            GazeUIButton gazeButton = result.gameObject.GetComponentInParent<GazeUIButton>();
 
-            if (button == scanButton)
-                return scanButton.gameObject;
+            if (gazeButton != null && gazeButton.IsAvailable)
+                return gazeButton;
         }
 
         return null;
     }
 
-    private bool IsScanButtonTarget(GameObject target)
+    private void OnGazeTargetChanged(GameObject newTarget, GazeUIButton newUIButton)
     {
-        return scanButton != null && target == scanButton.gameObject;
-    }
-
-    private void OnGazeTargetChanged(GameObject newTarget)
-    {
-        if (currentTarget != null)
-        {
-            if (IsScanButtonTarget(currentTarget))
-                ResetScanButtonVisuals();
-            else
-                HideSelectionIndicator(currentTarget);
-        }
+        if (currentUIButton != null)
+            currentUIButton.ResetSelectionVisuals();
+        else if (currentTarget != null)
+            HideSelectionIndicator(currentTarget);
 
         if (inspectedAnchor != null)
         {
@@ -242,15 +212,16 @@ public sealed class GazeInteractionManager : MonoBehaviour
         }
 
         currentTarget = newTarget;
+        currentUIButton = newUIButton;
         dwellTimer = 0f;
         dwellTriggered = false;
 
         if (currentTarget == null)
             return;
 
-        if (IsScanButtonTarget(currentTarget))
+        if (currentUIButton != null)
         {
-            BeginScanButtonHover();
+            currentUIButton.BeginSelection();
         }
         else if (anchors.TryGetValue(currentTarget, out AnchorData anchor) &&
                  !anchor.isInspected)
@@ -260,7 +231,7 @@ public sealed class GazeInteractionManager : MonoBehaviour
     }
 
     // ============================================================
-    // SELECTION INDICATOR
+    // AR ANCHOR SELECTION INDICATOR
     // ============================================================
 
     private void ShowSelectionIndicator(GameObject target)
@@ -294,76 +265,6 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
         if (anchor.selectionIndicator != null)
             anchor.selectionIndicator.SetActive(false);
-    }
-
-    private void BeginScanButtonHover()
-    {
-        if (scanOuterCircle != null)
-            scanOuterCircle.SetActive(true);
-
-        if (scanButtonRect != null)
-            scanButtonRect.localScale = scanButtonBaseScale;
-    }
-
-    private void SetScanButtonProgress(float progress)
-    {
-        if (scanButtonRect == null)
-            return;
-
-        if (scanOuterCircle != null && !scanOuterCircle.activeSelf)
-            scanOuterCircle.SetActive(true);
-
-        Vector3 targetScale = scanButtonBaseScale * scanSelectedScale;
-        scanButtonRect.localScale = Vector3.Lerp(
-            scanButtonBaseScale,
-            targetScale,
-            Mathf.Clamp01(progress)
-        );
-    }
-
-    private void ResetScanButtonVisuals()
-    {
-        if (scanOuterCircle != null)
-            scanOuterCircle.SetActive(false);
-
-        if (scanButtonRect != null && scanButtonActivationCoroutine == null)
-            scanButtonRect.localScale = scanButtonBaseScale;
-    }
-
-    private void BeginScanButtonActivation()
-    {
-        if (scanButtonActivationCoroutine != null)
-            StopCoroutine(scanButtonActivationCoroutine);
-
-        scanButtonActivationCoroutine = StartCoroutine(CompleteScanButtonActivation());
-    }
-
-    private IEnumerator CompleteScanButtonActivation()
-    {
-        if (scanButtonRect == null || scanButton == null)
-            yield break;
-
-        Vector3 startScale = scanButtonRect.localScale;
-        float elapsed = 0f;
-
-        while (elapsed < scanReleaseDuration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-
-            float t = Mathf.Clamp01(elapsed / scanReleaseDuration);
-            t = Mathf.SmoothStep(0f, 1f, t);
-
-            scanButtonRect.localScale = Vector3.Lerp(startScale, scanButtonBaseScale, t);
-            yield return null;
-        }
-
-        scanButtonRect.localScale = scanButtonBaseScale;
-
-        if (scanOuterCircle != null)
-            scanOuterCircle.SetActive(false);
-
-        scanButton.onClick.Invoke();
-        scanButtonActivationCoroutine = null;
     }
 
     // ============================================================
@@ -646,6 +547,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     private void CloseInspection()
     {
+        CancelInspectionClose();
+
         if (inspectedAnchor == null)
             return;
 
@@ -830,6 +733,12 @@ public sealed class GazeInteractionManager : MonoBehaviour
             inspectionCoroutine = null;
         }
 
+        CancelInspectionClose();
+
+        if (currentUIButton != null)
+            currentUIButton.ResetSelectionVisuals();
+
+        currentUIButton = null;
         inspectedAnchor = null;
         currentTarget = null;
         dwellTimer = 0f;
