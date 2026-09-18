@@ -7,6 +7,8 @@ public sealed class HelpPanelController : MonoBehaviour
     [SerializeField] private GameObject helpButton;
     [SerializeField] private GameObject helpOuterCircle;
 
+    public bool IsOpen => helpPanel != null && helpPanel.activeSelf;
+
     private const string HelpSeenKey = "HelpPanelSeen_v1";
 
     private void Start()

@@ -8,12 +8,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/ECARUII.unity
     guid: 6e78ffeca96013f41b91d5d24b15171d
-  - enabled: 0
-    path: Assets/Scenes/Demos/Yolo11Seg AR Scan Demo.unity
-    guid: 412768936b5ea7a4eb78b728c83fa88f
-  - enabled: 0
-    path: Assets/Scenes/Demos/Eye Gaze Cursor Demo.unity
-    guid: 166bea06e3ba82140984a7f48c236ae5
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: 6ee72d15cf39dd748a13eac57397b9af, type: 2}
     UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: 0465d33c6aee55f44b0237db8b0e0259, type: 2}
