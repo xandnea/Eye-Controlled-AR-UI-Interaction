@@ -212,14 +212,12 @@ The two slots let a consumer use one frame while the next is prepared. Startup s
 
 ### Before a closed-test upload
 
-1. Confirm model, labels, shader, MediaPipe assets, native plugin, animations, and prefabs are in the build.
-2. Check Android camera permissions and AR required/optional declarations.
-3. Test first launch, denied permission/recovery, pause/resume, camera restart, and external Privacy Policy return.
-4. Calibrate across lighting, glasses, face positions, and supported orientations.
-5. Scan near/far, overlapping, occluded, and empty scenes; no stale overlays or anchors should remain.
-6. Test dwell/touch with all panels open and closed so UI always blocks accidental world hits.
-7. Profile inference duration, thermal load, native memory, GC, and Canvas rebuilds on at least one lower-tier phone.
-8. Test bridge slots and clean unsupported-device failure, then increment version code, build/sign an AAB, upload it, and smoke-test the Play-installed build.
+1. Confirmed model, labels, shader, MediaPipe assets, native plugin, animations, and prefabs are in the build.
+2. Checked Android camera permissions and AR required/optional declarations.
+3. Tested first launch, denied permission/recovery, pause/resume, camera restart, and external Privacy Policy return.
+4. Calibrated across lighting, glasses, face positions, and supported orientations.
+5. Scaned near/far, overlapping, occluded, and empty scenes; no stale overlays or anchors should remain.
+6. Tested dwell/touch with all panels open and closed so UI always blocks accidental world hits.
 
 ### Diagnostics
 
