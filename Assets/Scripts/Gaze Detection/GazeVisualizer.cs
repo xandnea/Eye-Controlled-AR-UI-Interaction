@@ -14,9 +14,10 @@ using UnityEngine;
 /// smoothing and deadzone handling are performed later by GlobalGazeCalibrator so
 /// those parameters have a direct, intuitive meaning in UI pixels.
 /// </summary>
-public class GazeVisualizer : MonoBehaviour
+public sealed class GazeVisualizer : MonoBehaviour
 {
     [Header("References")]
+    [Tooltip("MediaPipe runner that publishes face-landmark results.")]
     [SerializeField] private FaceLandmarkerRunner faceLandmarkerRunner;
 
     private readonly object _gazeLock = new object();
@@ -46,9 +47,13 @@ public class GazeVisualizer : MonoBehaviour
     /// </summary>
     public readonly struct RawEyeGaze
     {
+        /// <summary>Left-eye horizontal iris displacement divided by eye width.</summary>
         public readonly float leftX;
+        /// <summary>Left-eye vertical iris displacement divided by eye width.</summary>
         public readonly float leftY;
+        /// <summary>Right-eye horizontal iris displacement divided by eye width.</summary>
         public readonly float rightX;
+        /// <summary>Right-eye vertical iris displacement divided by eye width.</summary>
         public readonly float rightY;
 
         /// <summary>
@@ -83,6 +88,11 @@ public class GazeVisualizer : MonoBehaviour
         if (faceLandmarkerRunner != null)
             faceLandmarkerRunner.OnFaceLandmarksDetected -= ProcessGaze;
     }
+
+    /// <summary>
+    /// Gets whether local calibration has supplied valid normalization bounds.
+    /// </summary>
+    public bool HasCalibrationBounds => _hasCalibrationBounds;
 
     /// <summary>
     /// Stores the robust per-eye bounds measured during local calibration.

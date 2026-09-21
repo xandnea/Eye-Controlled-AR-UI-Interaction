@@ -2,17 +2,24 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>Visual feedback style used while gaze dwell progresses on a UI button.</summary>
 public enum GazeUIButtonSelectionMode
 {
+    /// <summary>Expands the button toward a fixed reference circle.</summary>
     ExpandToOuterCircle,
+    /// <summary>Fills a radial overlay without changing the button scale.</summary>
     FillOverlay
 }
 
+/// <summary>
+/// Adds dwell-selection feedback and activation behavior to a standard Unity UI Button.
+/// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Button))]
 public sealed class GazeUIButton : MonoBehaviour
 {
     [Header("Selection Style")]
+    [Tooltip("Visual feedback used while gaze dwell progresses on this button.")]
     [SerializeField]
     private GazeUIButtonSelectionMode selectionMode =
         GazeUIButtonSelectionMode.ExpandToOuterCircle;
@@ -35,6 +42,7 @@ public sealed class GazeUIButton : MonoBehaviour
     private Coroutine activationCoroutine;
     private bool initialized;
 
+    /// <summary>Gets whether this component and its Button can currently be selected.</summary>
     public bool IsAvailable =>
         enabled &&
         gameObject.activeInHierarchy &&
@@ -74,6 +82,7 @@ public sealed class GazeUIButton : MonoBehaviour
         ResetSelectionVisualsImmediate();
     }
 
+    /// <summary>Initializes the selected feedback when gaze first enters this button.</summary>
     public void BeginSelection()
     {
         Initialize();
@@ -98,10 +107,14 @@ public sealed class GazeUIButton : MonoBehaviour
         }
     }
 
+    /// <summary>Updates the selected feedback for the current dwell progress.</summary>
+    /// <param name="progress">Normalized dwell progress in [0, 1].</param>
+    /// <param name="selectedScale">Scale multiplier reached at full progress in expand mode.</param>
     public void SetSelectionProgress(float progress, float selectedScale)
     {
         Initialize();
         progress = Mathf.Clamp01(progress);
+        selectedScale = Mathf.Max(0f, selectedScale);
 
         switch (selectionMode)
         {
@@ -128,6 +141,7 @@ public sealed class GazeUIButton : MonoBehaviour
         }
     }
 
+    /// <summary>Clears dwell feedback without interrupting an active release animation.</summary>
     public void ResetSelectionVisuals()
     {
         Initialize();
@@ -152,6 +166,10 @@ public sealed class GazeUIButton : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Activates the Button immediately in fill mode or after the expand-mode release animation.
+    /// </summary>
+    /// <param name="releaseDuration">Seconds used to return an expanded button to its base scale.</param>
     public void Activate(float releaseDuration)
     {
         Initialize();
@@ -175,6 +193,8 @@ public sealed class GazeUIButton : MonoBehaviour
         activationCoroutine = StartCoroutine(ReleaseAndInvoke(releaseDuration));
     }
 
+    /// <summary>Returns an expanded button to its base scale, then invokes its click event.</summary>
+    /// <param name="releaseDuration">Requested unscaled animation duration in seconds.</param>
     private IEnumerator ReleaseAndInvoke(float releaseDuration)
     {
         if (buttonRect == null)
@@ -212,6 +232,7 @@ public sealed class GazeUIButton : MonoBehaviour
         Button.onClick.Invoke();
     }
 
+    /// <summary>Caches required components and validates the selected feedback configuration.</summary>
     private void Initialize()
     {
         if (initialized)
@@ -245,6 +266,7 @@ public sealed class GazeUIButton : MonoBehaviour
         }
     }
 
+    /// <summary>Immediately restores all supported feedback elements to their idle state.</summary>
     private void ResetSelectionVisualsImmediate()
     {
         if (outerCircle != null)

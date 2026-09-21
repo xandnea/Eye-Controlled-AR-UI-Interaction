@@ -6,43 +6,61 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
+/// <summary>
+/// Converts the calibrated gaze cursor (and optional touch input) into dwell-based
+/// interaction with Unity UI buttons and registered AR detection visuals.
+/// </summary>
 public sealed class GazeInteractionManager : MonoBehaviour
 {
     [Header("References")]
+    [Tooltip("AR camera used for world-space raycasts and inspection-panel hit testing.")]
     [SerializeField] private Camera arCamera;
+    [Tooltip("RectTransform whose rendered position represents the current calibrated gaze.")]
     [SerializeField] private RectTransform gazeCursor;
 
     [Header("World Interaction")]
+    [Tooltip("Physics layers containing colliders for registered AR detection visuals.")]
     [SerializeField] private LayerMask worldInteractableLayers;
-    [SerializeField] private float maxRayDistance = 10f;
+    [Tooltip("Maximum world-space distance checked for gaze and touch inspection.")]
+    [SerializeField, Min(0f)] private float maxRayDistance = 10f;
 
     [Header("UI Button Interaction")]
     [Tooltip("Scale reached by every gaze button using Expand To Outer Circle.")]
-    [SerializeField] private float uiButtonSelectedScale = 1.4f;
+    [SerializeField, Min(0f)] private float uiButtonSelectedScale = 1.4f;
 
     [Tooltip("Time used to return an expanded gaze button to its normal scale before invoking OnClick.")]
-    [SerializeField] private float uiButtonReleaseDuration = 0.12f;
+    [SerializeField, Min(0f)] private float uiButtonReleaseDuration = 0.12f;
 
     [Header("Cursor Settings")]
+    [Tooltip("Image component whose color and visibility represent the gaze cursor.")]
     [SerializeField] private Image cursorImage;
+    [Tooltip("Whether the cursor image starts hidden. Interaction can remain active while hidden.")]
     [SerializeField] private bool cursorHidden = true;
+    [Tooltip("Initial cursor opacity.")]
     [SerializeField, Range(0f, 1f)] private float cursorAlpha = 1f;
+    [Tooltip("Initial multiplier applied to the cursor RectTransform's authored scale.")]
     [SerializeField, Range(0.5f, 2f)] private float cursorScale = 1f;
 
     private Vector3 cursorBaseScale;
     private bool cursorBaseScaleInitialized;
 
     [Header("Touch Inspection")]
+    [Tooltip("Allows a screen press to open or close registered AR inspection panels.")]
     [SerializeField] private bool touchInspectionEnabled = false;
 
     [Header("Dwell")]
-    [SerializeField] private float dwellDuration = 1f;
-    [SerializeField] private float inspectionExitGraceDuration = 0.2f;
+    [Tooltip("Unscaled seconds gaze must remain on a target before activation.")]
+    [SerializeField, Min(0f)] private float dwellDuration = 1f;
+    [Tooltip("Unscaled grace period before closing an inspection panel after gaze exits it.")]
+    [SerializeField, Min(0f)] private float inspectionExitGraceDuration = 0.2f;
 
     [Header("Anchor Animation")]
+    [Tooltip("Degrees per second applied to uninspected detection models.")]
     [SerializeField] private float idleSpinSpeed = 25f;
-    [SerializeField] private float turnDuration = 0.25f;
-    [SerializeField] private float panelExpandDuration = 0.2f;
+    [Tooltip("Unscaled seconds used to turn a model into an inspection orientation.")]
+    [SerializeField, Min(0f)] private float turnDuration = 0.25f;
+    [Tooltip("Unscaled seconds used to expand or collapse an inspection panel.")]
+    [SerializeField, Min(0f)] private float panelExpandDuration = 0.2f;
 
     private readonly Dictionary<GameObject, AnchorData> anchors = new();
     private readonly List<RaycastResult> uiRaycastResults = new();
@@ -97,13 +115,7 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     private void OnDisable()
     {
-        if (currentUIButton != null)
-            currentUIButton.ResetSelectionVisuals();
-        else if (currentTarget != null)
-            HideSelectionIndicator(currentTarget);
-
-        currentUIButton = null;
-        CancelInspectionClose();
+        ResetGazeInteractionState();
     }
 
     private void Update()
@@ -113,15 +125,13 @@ public sealed class GazeInteractionManager : MonoBehaviour
         UpdateGazeInteraction();
     }
 
-    // ============================================================
-    // GAZE INTERACTION
-    // ============================================================
+    #region Gaze Interaction
 
     private void UpdateGazeInteraction()
     {
         if (!gazeInteractionEnabled ||
-        gazeCursor == null ||
-        arCamera == null)
+            gazeCursor == null ||
+            arCamera == null)
         {
             return;
         }
@@ -247,6 +257,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
         }
     }
 
+    /// <summary>Enables or disables dwell interaction without changing cursor visibility.</summary>
+    /// <param name="enabled">Whether gaze targets should be evaluated each frame.</param>
     public void SetGazeInteractionEnabled(bool enabled)
     {
         if (gazeInteractionEnabled == enabled)
@@ -260,6 +272,12 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
     private void ResetGazeInteractionState()
     {
+        if (inspectionCoroutine != null)
+        {
+            StopCoroutine(inspectionCoroutine);
+            inspectionCoroutine = null;
+        }
+
         if (currentUIButton != null)
             currentUIButton.ResetSelectionVisuals();
         else if (currentTarget != null)
@@ -271,11 +289,14 @@ public sealed class GazeInteractionManager : MonoBehaviour
         dwellTriggered = false;
 
         CancelInspectionClose();
+
+        if (inspectedAnchor != null)
+            ForceCloseInspection(inspectedAnchor);
     }
 
-    // ============================================================
-    // AR ANCHOR SELECTION INDICATOR
-    // ============================================================
+    #endregion
+
+    #region AR Anchor Selection Indicator
 
     private void ShowSelectionIndicator(GameObject target)
     {
@@ -310,10 +331,12 @@ public sealed class GazeInteractionManager : MonoBehaviour
             anchor.selectionIndicator.SetActive(false);
     }
 
-    // ============================================================
-    // CURSOR SETTINGS
-    // ============================================================
+    #endregion
 
+    #region Cursor Settings
+
+    /// <summary>Shows or hides the cursor image while preserving gaze interaction state.</summary>
+    /// <param name="hidden">True to hide the Image component.</param>
     public void SetCursorHidden(bool hidden)
     {
         cursorHidden = hidden;
@@ -322,6 +345,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
             cursorImage.enabled = !hidden;
     }
 
+    /// <summary>Changes cursor RGB values without overwriting its configured alpha.</summary>
+    /// <param name="color">RGB color to apply.</param>
     public void SetCursorColor(Color color)
     {
         if (cursorImage == null)
@@ -334,6 +359,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
         cursorImage.color = new Color(color.r, color.g, color.b, currentColor.a);
     }
 
+    /// <summary>Changes cursor opacity.</summary>
+    /// <param name="alpha">Requested alpha, clamped to [0, 1].</param>
     public void SetCursorAlpha(float alpha)
     {
         cursorAlpha = Mathf.Clamp01(alpha);
@@ -349,6 +376,8 @@ public sealed class GazeInteractionManager : MonoBehaviour
         cursorImage.color = color;
     }
 
+    /// <summary>Changes cursor scale relative to its authored RectTransform scale.</summary>
+    /// <param name="scale">Requested multiplier, clamped to [0.5, 2].</param>
     public void SetCursorScale(float scale)
     {
         cursorScale = Mathf.Clamp(scale, 0.5f, 2f);
@@ -365,10 +394,12 @@ public sealed class GazeInteractionManager : MonoBehaviour
         gazeCursor.localScale = cursorBaseScale * cursorScale;
     }
 
-    // ============================================================
-    // TOUCH INSPECTION
-    // ============================================================
+    #endregion
 
+    #region Touch Inspection
+
+    /// <summary>Enables or disables screen-press inspection of registered AR visuals.</summary>
+    /// <param name="enabled">Whether touch inspection should process input.</param>
     public void SetTouchInspectionEnabled(bool enabled)
     {
         touchInspectionEnabled = enabled;
@@ -451,9 +482,9 @@ public sealed class GazeInteractionManager : MonoBehaviour
         Inspect(target);
     }
 
-    // ============================================================
-    // WORLD RAYCAST
-    // ============================================================
+    #endregion
+
+    #region World Raycast
 
     private GameObject FindWorldTarget(Vector2 screenPosition)
     {
@@ -499,9 +530,9 @@ public sealed class GazeInteractionManager : MonoBehaviour
         );
     }
 
-    // ============================================================
-    // IDLE ANCHOR ROTATION
-    // ============================================================
+    #endregion
+
+    #region Idle Anchor Rotation
 
     private void UpdateIdleRotation()
     {
@@ -520,9 +551,9 @@ public sealed class GazeInteractionManager : MonoBehaviour
         }
     }
 
-    // ============================================================
-    // INSPECTION
-    // ============================================================
+    #endregion
+
+    #region Inspection
 
     private void Inspect(GameObject target)
     {
@@ -704,10 +735,17 @@ public sealed class GazeInteractionManager : MonoBehaviour
             inspectedAnchor = null;
     }
 
-    // ============================================================
-    // REGISTRATION
-    // ============================================================
+    #endregion
 
+    #region Registration
+
+    /// <summary>
+    /// Registers a spawned detection visual and resolves the fixed prefab hierarchy
+    /// used for rotation, dwell feedback, and its inspection panel.
+    /// </summary>
+    /// <param name="root">Root of the instantiated detection visual.</param>
+    /// <param name="className">Detected object label shown in the inspection panel.</param>
+    /// <param name="confidence">YOLO confidence expressed in [0, 1].</param>
     public void RegisterAnchor(GameObject root, string className, float confidence)
     {
         if (root == null)
@@ -755,7 +793,7 @@ public sealed class GazeInteractionManager : MonoBehaviour
             selectionFill = selectionFillTransform != null ? selectionFillTransform.GetComponent<Image>() : null,
 
             className = className,
-            confidence = confidence,
+            confidence = Mathf.Clamp01(confidence),
 
             baseLocalRotation = model.localRotation,
             spinAngle = 0f,
@@ -777,32 +815,21 @@ public sealed class GazeInteractionManager : MonoBehaviour
 
         anchors[root] = data;
 
-        Debug.Log($"[GazeInteraction] Registered {root.name} | {className} | {confidence:F3}");
+        Debug.Log(
+            $"[GazeInteraction] Registered {root.name} | {className} | " +
+            $"{data.confidence:F3}");
     }
 
-    // ============================================================
-    // CLEAR
-    // ============================================================
+    #endregion
 
+    #region Clear
+
+    /// <summary>Clears registered AR interaction state before detection visuals are removed.</summary>
     public void ClearAnchors()
     {
-        if (inspectionCoroutine != null)
-        {
-            StopCoroutine(inspectionCoroutine);
-            inspectionCoroutine = null;
-        }
-
-        CancelInspectionClose();
-
-        if (currentUIButton != null)
-            currentUIButton.ResetSelectionVisuals();
-
-        currentUIButton = null;
-        inspectedAnchor = null;
-        currentTarget = null;
-        dwellTimer = 0f;
-        dwellTriggered = false;
-
+        ResetGazeInteractionState();
         anchors.Clear();
     }
+
+    #endregion
 }

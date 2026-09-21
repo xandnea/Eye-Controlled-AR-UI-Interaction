@@ -10,14 +10,18 @@ using UnityEngine.XR.ARSubsystems;
 public sealed class DetectionAnchorManager : MonoBehaviour
 {
     [Header("AR Dependencies")]
+    [Tooltip("AR Foundation manager used to create and remove world-tracked anchors.")]
     [SerializeField] private ARAnchorManager anchorManager;
+    [Tooltip("AR camera whose orientation defines anchor rotation and camera-relative offsets.")]
     [SerializeField] private Camera arCamera;
 
     [Header("Interaction")]
+    [Tooltip("Registers spawned visuals for gaze and optional touch inspection.")]
     [SerializeField]
     private GazeInteractionManager gazeInteractionManager;
 
     [Header("Visualization")]
+    [Tooltip("Prefab instantiated beneath each successfully created AR anchor.")]
     [SerializeField] private GameObject anchorPrefab;
 
     [SerializeField]
@@ -31,6 +35,7 @@ public sealed class DetectionAnchorManager : MonoBehaviour
 
     private readonly List<ARAnchor> activeAnchors = new();
     private readonly List<GameObject> activeVisuals = new();
+    private int anchorGeneration;
 
     /// <summary>
     /// Validates serialized AR dependencies before the component begins processing detections.
@@ -76,6 +81,9 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     /// </summary>
     public void ClearAnchors()
     {
+        // Invalidates any TryAddAnchorAsync operations that started before this clear.
+        anchorGeneration++;
+
         if (anchorManager == null)
         {
             ObjectDetectionDebug.LogError(
@@ -91,6 +99,14 @@ public sealed class DetectionAnchorManager : MonoBehaviour
             $"Clearing {activeAnchors.Count} previous anchor(s).",
             this
         );
+
+        for (int i = activeVisuals.Count - 1; i >= 0; i--)
+        {
+            if (activeVisuals[i] != null)
+                Destroy(activeVisuals[i]);
+        }
+
+        activeVisuals.Clear();
 
         for (int i = activeAnchors.Count - 1; i >= 0; i--)
         {
@@ -109,7 +125,6 @@ public sealed class DetectionAnchorManager : MonoBehaviour
         }
 
         activeAnchors.Clear();
-        activeVisuals.Clear();
 
         if (gazeInteractionManager != null)
         {
@@ -127,6 +142,7 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     /// <param name="worldPosition">World-space position returned by the AR depth raycast.</param>
     /// <param name="detectionIndex">Index of the detection in the current YOLO result set.</param>
     /// <param name="className">YOLO class label associated with the detection.</param>
+    /// <param name="confidence">YOLO confidence expressed in [0, 1].</param>
     public void CreateAnchor(
         Vector2 viewportCenter,
         float depthMeters,
@@ -155,7 +171,9 @@ public sealed class DetectionAnchorManager : MonoBehaviour
             return;
         }
 
-        if (depthMeters <= 0f || float.IsNaN(depthMeters))
+        if (depthMeters <= 0f ||
+            float.IsNaN(depthMeters) ||
+            float.IsInfinity(depthMeters))
         {
             ObjectDetectionDebug.LogWarning(
                 ObjectDetectionLogCategory.Anchors,
@@ -171,13 +189,19 @@ public sealed class DetectionAnchorManager : MonoBehaviour
 
         ObjectDetectionDebug.Log(
             ObjectDetectionLogCategory.Anchors,
-            $"Initiating anchor creation | detection={detectionIndex} class={className} confidence{confidence:F3}%" +
+            $"Initiating anchor creation | detection={detectionIndex} class={className} " +
+            $"confidence={confidence:P1} " +
             $"viewport={viewportCenter} depth={depthMeters:F3}m " +
             $"origWorld={worldPosition} shiftedWorld={shiftedPosition} offset={anchorOffset}",
             this
         );
 
-        CreateAnchorAsync(pose, detectionIndex, className, confidence);
+        CreateAnchorAsync(
+            pose,
+            detectionIndex,
+            className,
+            confidence,
+            anchorGeneration);
     }
 
     /// <summary>
@@ -186,11 +210,14 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     /// <param name="pose">World-space pose at which the AR anchor should be created.</param>
     /// <param name="detectionIndex">Index of the source detection in the current YOLO result set.</param>
     /// <param name="className">YOLO class label associated with the source detection.</param>
+    /// <param name="confidence">YOLO confidence expressed in [0, 1].</param>
+    /// <param name="generation">Anchor generation active when creation was requested.</param>
     private async void CreateAnchorAsync(
         Pose pose,
         int detectionIndex,
         string className,
-        float confidence)
+        float confidence,
+        int generation)
     {
         if (anchorManager == null)
             return;
@@ -219,6 +246,18 @@ public sealed class DetectionAnchorManager : MonoBehaviour
                     $"TryAddAnchorAsync succeeded but returned null | detection={detectionIndex}.",
                     this
                 );
+                return;
+            }
+
+            if (generation != anchorGeneration)
+            {
+                // A newer scan cleared the scene while this asynchronous request was
+                // pending. Remove the stale anchor instead of leaking it into that scan.
+                if (anchorManager != null)
+                    anchorManager.TryRemoveAnchor(anchor);
+                else
+                    Destroy(anchor.gameObject);
+
                 return;
             }
 
@@ -270,6 +309,7 @@ public sealed class DetectionAnchorManager : MonoBehaviour
     /// <param name="anchor">Parent AR anchor that owns the visualization.</param>
     /// <param name="detectionIndex">Index of the source detection.</param>
     /// <param name="className">YOLO class label associated with the source detection.</param>
+    /// <param name="confidence">YOLO confidence expressed in [0, 1].</param>
     private void CreateAnchorVisual(
         ARAnchor anchor,
         int detectionIndex,

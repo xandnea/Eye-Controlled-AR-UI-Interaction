@@ -31,27 +31,37 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     public class AspectChangeEvent : UnityEvent<float> { }
 
     [Header("AR Dependencies")]
+    [Tooltip("Samples ARCore depth at each valid segmentation-mask center.")]
     [SerializeField] private DepthSampler depthSampler;
+    [Tooltip("Creates and replaces the AR anchors produced by each scan.")]
     [SerializeField] private DetectionAnchorManager detectionAnchorManager;
+    [Tooltip("Optional Lottie overlay shown while inference results are prepared.")]
     [SerializeField] private ScanAnimationOverlayController scanAnimationOverlay;
 
     [Header("Scan Presentation")]
+    [Tooltip("Minimum unscaled time the scan overlay remains visible after a valid scan starts.")]
     [SerializeField, Min(0f)] private float minimumScanOverlayTime = 1.5f;
 
     [Header("Detection Model")]
+    [Tooltip("Bundled ONNX model. When empty, the runner downloads Model File instead.")]
     [SerializeField] private OrtAsset model;
 
+    [Tooltip("Fallback YOLO11 segmentation model downloaded when no bundled model is assigned.")]
     [SerializeField]
     private RemoteFile modelFile = new(
         "https://github.com/asus4/onnxruntime-unity-examples/releases/download/v0.2.7/yolo11n-seg-dynamic.onnx"
     );
 
+    [Tooltip("Inference, confidence, and segmentation options passed to Yolo11Seg.")]
     [SerializeField] private Yolo11Seg.Options options;
 
     [Header("Detection UI")]
+    [Tooltip("Text prefab used for each pooled detection label and bounding box.")]
     [SerializeField] private TMPro.TMP_Text detectionBoxPrefab;
+    [Tooltip("RectTransform whose size defines the detection-overlay viewport.")]
     [SerializeField] private RectTransform detectionContainer;
-    [SerializeField] private int maxDetections = 20;
+    [Tooltip("Maximum number of detection boxes kept in the reusable UI pool.")]
+    [SerializeField, Min(1)] private int maxDetections = 20;
 
     [Header("Depth Sampling")]
     [SerializeField]
@@ -64,7 +74,9 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     private float depthViewportMargin = 0.03f;
 
     [Header("Output Events")]
+    [Tooltip("Invoked when the inference engine exposes a different segmentation texture.")]
     public TextureEvent OnSegmentationTexture = new();
+    [Tooltip("Invoked with the width-to-height ratio of a new segmentation texture.")]
     public AspectChangeEvent OnSegmentationAspectChange = new();
 
     private Yolo11Seg inference;
@@ -75,7 +87,7 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     private readonly StringBuilder stringBuilder = new();
     private Coroutine scanCoroutine;
     private int scanRequestId;
-    
+
     private struct PendingAnchor
     {
         public Vector2 viewportPoint;
@@ -101,11 +113,30 @@ public sealed class Yolo11SegRunner : MonoBehaviour
             this
         );
 
-        byte[] onnxFile = model != null
-            ? model.bytes
-            : await modelFile.Load(destroyCancellationToken);
+        try
+        {
+            byte[] onnxFile = model != null
+                ? model.bytes
+                : await modelFile.Load(destroyCancellationToken);
 
-        inference = new Yolo11Seg(onnxFile, options);
+            if (onnxFile == null || onnxFile.Length == 0)
+                throw new InvalidOperationException("The YOLO ONNX model is empty.");
+
+            inference = new Yolo11Seg(onnxFile, options);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when this component is destroyed while model loading is pending.
+            return;
+        }
+        catch (Exception exception)
+        {
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Lifecycle,
+                $"Failed to initialize the YOLO11 segmentation model.\n{exception}",
+                this);
+            return;
+        }
 
         InitializeDetectionBoxes();
 
@@ -123,6 +154,17 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     /// </summary>
     private void OnDestroy()
     {
+        scanRequestId++;
+
+        if (scanCoroutine != null)
+        {
+            StopCoroutine(scanCoroutine);
+            scanCoroutine = null;
+        }
+
+        if (scanAnimationOverlay != null)
+            scanAnimationOverlay.StopAndHide();
+
         if (TryGetComponent(out VirtualTextureSource source))
             source.OnTexture.RemoveListener(OnTexture);
 
@@ -163,6 +205,7 @@ public sealed class Yolo11SegRunner : MonoBehaviour
             return;
         }
 
+        maxDetections = Mathf.Max(1, maxDetections);
         detectionBoxes = new TMPro.TMP_Text[maxDetections];
         detectionBoxOutlines = new Image[maxDetections];
 
@@ -266,6 +309,11 @@ public sealed class Yolo11SegRunner : MonoBehaviour
         scanCoroutine = StartCoroutine(ScanRoutine(scanRequestId));
     }
 
+    /// <summary>
+    /// Runs inference, holds the scan overlay for its minimum presentation time, and
+    /// replaces the previous scan's anchors if this request is still current.
+    /// </summary>
+    /// <param name="requestId">Monotonic request identifier used to discard superseded scans.</param>
     private IEnumerator ScanRoutine(int requestId)
     {
         ObjectDetectionDebug.Log(
@@ -283,7 +331,25 @@ public sealed class Yolo11SegRunner : MonoBehaviour
         // the Unity main thread.
         yield return null;
 
-        List<PendingAnchor> pendingAnchors = RunInference(latestTexture);
+        List<PendingAnchor> pendingAnchors;
+
+        try
+        {
+            pendingAnchors = RunInference(latestTexture);
+        }
+        catch (Exception exception)
+        {
+            ObjectDetectionDebug.LogError(
+                ObjectDetectionLogCategory.Yolo,
+                $"YOLO inference failed.\n{exception}",
+                this);
+
+            if (scanAnimationOverlay != null)
+                scanAnimationOverlay.StopAndHide();
+
+            scanCoroutine = null;
+            yield break;
+        }
 
         if (requestId != scanRequestId)
             yield break;
@@ -333,10 +399,11 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     }
 
     /// <summary>
-    /// Executes synchronous YOLO inference and dispatches the resulting UI,
-    /// segmentation, depth, and anchor updates.
+    /// Executes synchronous YOLO inference, updates detection and segmentation UI,
+    /// and collects depth-backed detections for deferred anchor creation.
     /// </summary>
     /// <param name="texture">Camera texture to process.</param>
+    /// <returns>Depth-backed detections ready to be anchored after the overlay closes.</returns>
     private List<PendingAnchor> RunInference(Texture texture)
     {
         inference.Run(texture);
@@ -428,6 +495,15 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     private void UpdateSegmentationOutput()
     {
         Texture segmentationTexture = inference.SegmentationTexture;
+
+        if (segmentationTexture == null)
+        {
+            ObjectDetectionDebug.LogWarning(
+                ObjectDetectionLogCategory.Segmentation,
+                "Inference completed without a segmentation texture.",
+                this);
+            return;
+        }
 
         ObjectDetectionDebug.Log(
             ObjectDetectionLogCategory.Segmentation,
@@ -530,11 +606,14 @@ public sealed class Yolo11SegRunner : MonoBehaviour
     }
 
     /// <summary>
-    /// ...
+    /// Converts detections with mask centers and valid AR depth hits into deferred
+    /// anchor requests. Detections without either requirement remain visible in the
+    /// bounding-box UI but do not create world content.
     /// </summary>
-    /// <param...</param>
+    /// <param name="detections">YOLO detections produced by the current inference pass.</param>
+    /// <returns>Anchor inputs for detections that produced usable depth hits.</returns>
     private List<PendingAnchor> CollectAnchorResults(
-    ReadOnlySpan<Yolo11Seg.Detection> detections)
+        ReadOnlySpan<Yolo11Seg.Detection> detections)
     {
         var results = new List<PendingAnchor>();
         var labels = inference.labelNames;

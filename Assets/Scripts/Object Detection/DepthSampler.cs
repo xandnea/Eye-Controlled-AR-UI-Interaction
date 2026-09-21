@@ -10,7 +10,9 @@ using UnityEngine.XR.ARSubsystems;
 public sealed class DepthSampler : MonoBehaviour
 {
     [Header("AR Dependencies")]
+    [Tooltip("AR Foundation raycast manager used to query the current depth map.")]
     [SerializeField] private ARRaycastManager raycastManager;
+    [Tooltip("AR camera used to measure camera-to-hit distance.")]
     [SerializeField] private Camera arCamera;
 
     private readonly List<ARRaycastHit> hits = new();

@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2125985731202824023
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5817417588590946466}
+  - component: {fileID: 1990602814512580762}
+  m_Layer: 0
+  m_Name: Gaze Integration Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5817417588590946466
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2125985731202824023}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1990602814512580762
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2125985731202824023}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ac35f2abc13f1d44b58faa6686b45d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GazeInteractionManager
+  arCamera: {fileID: 0}
+  gazeCursor: {fileID: 0}
+  worldInteractableLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  maxRayDistance: 50
+  uiButtonSelectedScale: 1.4
+  uiButtonReleaseDuration: 0.1
+  cursorImage: {fileID: 0}
+  cursorHidden: 0
+  cursorAlpha: 1
+  cursorScale: 1
+  touchInspectionEnabled: 0
+  dwellDuration: 0.25
+  inspectionExitGraceDuration: 0.25
+  idleSpinSpeed: -30
+  turnDuration: 0.2
+  panelExpandDuration: 0.2

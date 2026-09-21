@@ -24,19 +24,28 @@ using UnityEngine.UI;
 /// Optional diagnostics are controlled by GazeDebugController on the
 /// overhead "Gaze Calibration" GameObject. Warnings and errors remain unconditional.
 /// </summary>
-public class GlobalGazeCalibrator : MonoBehaviour
+public sealed class GlobalGazeCalibrator : MonoBehaviour
 {
     [Header("References")]
+    [Tooltip("Provides locally normalized gaze samples after eye-range calibration.")]
     [SerializeField] private GazeVisualizer gazeVisualizer;
+    [Tooltip("RectTransform defining the screen area covered by calibration targets.")]
     [SerializeField] private RectTransform calibrationArea;
+    [Tooltip("Movable dot shown at each of the nine calibration positions.")]
     [SerializeField] private RectTransform calibrationTarget;
+    [Tooltip("Runtime cursor positioned from the fitted gaze-to-screen mapping.")]
     [SerializeField] private RectTransform cursorIndicator;
+    [Tooltip("Text used for countdown, retry, failure, and completion messages.")]
     [SerializeField] private TextMeshProUGUI statusInstructionsText;
+    [Tooltip("Shared local/global calibration instruction presentation.")]
     [SerializeField] private CalibrationInstructionsUI calibrationInstructionsUI;
+    [Tooltip("Temporarily disabled while global calibration owns the gaze signal.")]
     [SerializeField] private GazeInteractionManager gazeInteractionManager;
 
     [Header("9-Point Calibration")]
+    [Tooltip("Horizontal distance kept between edge targets and the calibration-area boundary.")]
     [SerializeField, Min(0f)] private float horizontalPadding = 60f;
+    [Tooltip("Vertical distance kept between edge targets and the calibration-area boundary.")]
     [SerializeField, Min(0f)] private float verticalPadding = 80f;
 
     [Tooltip("Seconds shown before the first calibration target appears.")]
@@ -48,11 +57,13 @@ public class GlobalGazeCalibrator : MonoBehaviour
     [Tooltip("Time spent collecting gaze samples at each target.")]
     [SerializeField, Range(0.25f, 3f)] private float sampleTimePerTarget = 1.0f;
 
+    [Tooltip("Minimum number of unique MediaPipe samples required at each target.")]
     [SerializeField, Min(5)] private int minimumSamplesPerTarget = 10;
 
     [Tooltip("How long to show the retry message when a calibration point does not collect enough samples.")]
     [SerializeField, Range(0.25f, 2f)] private float retryMessageDuration = 0.75f;
 
+    [Tooltip("Fraction removed from each end of a target's sample distribution.")]
     [SerializeField, Range(0f, 0.4f)] private float sampleTrimFraction = 0.2f;
 
     [Tooltip(
@@ -61,11 +72,16 @@ public class GlobalGazeCalibrator : MonoBehaviour
         "the calibration is rejected instead of producing a broken cursor mapping.")]
     [SerializeField, Range(0.01f, 0.15f)] private float minimumAdjacentGazeDistance = 0.035f;
 
+    [Tooltip("Color applied to the active calibration target.")]
     [SerializeField] private Color activeColor = Color.green;
 
+    /// <summary>Lowest supported exponential-filter response speed.</summary>
     public const int MinGazeFilterSpeed = 1;
+    /// <summary>Highest supported exponential-filter response speed.</summary>
     public const int MaxGazeFilterSpeed = 60;
+    /// <summary>Lowest supported radial cursor deadzone in pixels.</summary>
     public const int MinGazeDeadzonePixels = 0;
+    /// <summary>Highest supported radial cursor deadzone in pixels.</summary>
     public const int MaxGazeDeadzonePixels = 30;
 
     [Header("Cursor Filter")]
@@ -113,6 +129,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     private GazeDebugController _debugController;
     private Coroutine _calibrationRoutine;
     private Image _targetImage;
+    /// <summary>Gets whether the global-calibration coroutine is currently running.</summary>
     public bool IsRunning => _calibrationRoutine != null;
 
     private bool _isCalibrated;
@@ -124,21 +141,15 @@ public class GlobalGazeCalibrator : MonoBehaviour
         public readonly string label;
         public readonly Vector2 gaze;
         public readonly Vector2 normalizedScreen;
-        public readonly int sampleCount;
-        public readonly Vector2 standardDeviation;
 
         public CalibrationPoint(
             string label,
             Vector2 gaze,
-            Vector2 normalizedScreen,
-            int sampleCount,
-            Vector2 standardDeviation)
+            Vector2 normalizedScreen)
         {
             this.label = label;
             this.gaze = gaze;
             this.normalizedScreen = normalizedScreen;
-            this.sampleCount = sampleCount;
-            this.standardDeviation = standardDeviation;
         }
     }
 
@@ -203,18 +214,14 @@ public class GlobalGazeCalibrator : MonoBehaviour
         _calibrationRoutine = StartCoroutine(CalibrationSequence());
     }
 
-    /// <summary>
-    /// Getter and setter for gaze filter speed.
-    /// </summary>
+    /// <summary>Gets or sets the clamped exponential cursor-filter speed.</summary>
     public int GazeFilterSpeed
     {
         get => gazeFilterSpeed;
         set => gazeFilterSpeed = Mathf.Clamp(value, MinGazeFilterSpeed, MaxGazeFilterSpeed);
     }
 
-    /// <summary>
-    /// Getter and setter for gaze deadzone pixels.
-    /// </summary>
+    /// <summary>Gets or sets the clamped radial cursor deadzone in canvas pixels.</summary>
     public int GazeDeadzonePixels
     {
         get => gazeDeadzonePixels;
@@ -227,6 +234,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
             gazeInteractionManager.SetGazeInteractionEnabled(true);
     }
 
+    /// <summary>Forces the next valid gaze sample to initialize the cursor filter.</summary>
     public void ResetCursorFilter()
     {
         _filterInitialized = false;
@@ -255,8 +263,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         for (int i = 0; i < CalibrationGrid.Length; ++i)
         {
-            Vector2 targetLocalPosition =
-                GetCalibrationTargetLocalPosition(CalibrationGrid[i]);
+            Vector2 targetLocalPosition = GetCalibrationTargetLocalPosition(CalibrationGrid[i]);
 
             calibrationTarget.anchoredPosition =
                 ParentLocalToAnchoredPosition(
@@ -264,8 +271,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
                     calibrationArea,
                     targetLocalPosition);
 
-            Vector2 normalizedScreen =
-                LocalToNormalized(calibrationArea.rect, targetLocalPosition);
+            Vector2 normalizedScreen = LocalToNormalized(calibrationArea.rect, targetLocalPosition);
 
             Vector2 gazeSample = Vector2.zero;
             Vector2 sampleStdDev = Vector2.zero;
@@ -275,7 +281,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
             while (!collected)
             {
                 // Every attempt gets a fresh settle period before sampling.
-                yield return new WaitForSeconds(settleTimePerTarget);
+                yield return new WaitForSecondsRealtime(settleTimePerTarget);
 
                 gazeSample = Vector2.zero;
                 sampleStdDev = Vector2.zero;
@@ -320,9 +326,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
                 new CalibrationPoint(
                     CalibrationLabels[i],
                     gazeSample,
-                    normalizedScreen,
-                    sampleCount,
-                    sampleStdDev));
+                    normalizedScreen));
         }
 
         calibrationTarget.gameObject.SetActive(false);
@@ -340,6 +344,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
                     "Global gaze calibration failed.\nPlease try again.";
                 statusInstructionsText.gameObject.SetActive(true);
                 yield return new WaitForSeconds(2f);
+                statusInstructionsText.gameObject.SetActive(false);
             }
 
             if (calibrationInstructionsUI != null)
@@ -361,6 +366,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
                     "Global gaze calibration failed.\nPlease try again.";
                 statusInstructionsText.gameObject.SetActive(true);
                 yield return new WaitForSeconds(2f);
+                statusInstructionsText.gameObject.SetActive(false);
             }
 
             if (calibrationInstructionsUI != null)
@@ -409,6 +415,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
             statusInstructionsText.text = "Global gaze calibration complete.";
             statusInstructionsText.gameObject.SetActive(true);
             yield return new WaitForSeconds(1.5f);
+            statusInstructionsText.gameObject.SetActive(false);
         }
 
         if (calibrationInstructionsUI != null)
@@ -474,7 +481,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         while (timer < sampleTimePerTarget)
         {
-            timer += Time.deltaTime;
+            timer += Time.unscaledDeltaTime;
 
             if (gazeVisualizer.TryGetCurrentGazeVector(
                     out Vector2 gaze,
@@ -589,12 +596,10 @@ public class GlobalGazeCalibrator : MonoBehaviour
             calibrationArea == null)
             return Vector2.zero;
 
-        double[] basis = BuildBasis(currentGaze.x, currentGaze.y);
-
         float normalizedX =
-            Mathf.Clamp01((float)Evaluate(_xCoefficients, basis));
+            Mathf.Clamp01((float)Evaluate(_xCoefficients, currentGaze.x, currentGaze.y));
         float normalizedY =
-            Mathf.Clamp01((float)Evaluate(_yCoefficients, basis));
+            Mathf.Clamp01((float)Evaluate(_yCoefficients, currentGaze.x, currentGaze.y));
 
         RectTransform cursorParent =
             cursorIndicator.parent as RectTransform;
@@ -948,10 +953,10 @@ public class GlobalGazeCalibrator : MonoBehaviour
 
         foreach (CalibrationPoint point in _calibrationPoints)
         {
-            double[] basis = BuildBasis(point.gaze.x, point.gaze.y);
-
-            float predictedX = (float)Evaluate(_xCoefficients, basis);
-            float predictedY = (float)Evaluate(_yCoefficients, basis);
+            float predictedX =
+                (float)Evaluate(_xCoefficients, point.gaze.x, point.gaze.y);
+            float predictedY =
+                (float)Evaluate(_yCoefficients, point.gaze.x, point.gaze.y);
 
             float errorPixelsX =
                 (predictedX - point.normalizedScreen.x) * rect.width;
@@ -988,6 +993,15 @@ public class GlobalGazeCalibrator : MonoBehaviour
         {
             Debug.LogError(
                 "[Gaze] Calibration Target must be a direct child of Calibration Area.");
+            return false;
+        }
+
+        if (!gazeVisualizer.HasCalibrationBounds ||
+            !gazeVisualizer.isActiveAndEnabled)
+        {
+            Debug.LogError(
+                "[Gaze] Complete local calibration before starting global calibration.",
+                this);
             return false;
         }
 
@@ -1030,6 +1044,24 @@ public class GlobalGazeCalibrator : MonoBehaviour
     }
 
     /// <summary>
+    /// Evaluates one fitted quadratic axis without allocating a temporary basis array.
+    /// This overload is used by the per-frame cursor update path.
+    /// </summary>
+    /// <param name="coefficients">Six fitted coefficients for the output axis.</param>
+    /// <param name="x">Normalized horizontal gaze coordinate.</param>
+    /// <param name="y">Normalized vertical gaze coordinate.</param>
+    /// <returns>Predicted normalized screen coordinate.</returns>
+    private static double Evaluate(double[] coefficients, float x, float y)
+    {
+        return coefficients[0] +
+               coefficients[1] * x +
+               coefficients[2] * y +
+               coefficients[3] * x * y +
+               coefficients[4] * x * x +
+               coefficients[5] * y * y;
+    }
+
+    /// <summary>
     /// Converts a point from Rect local coordinates into normalized [0,1] coordinates.
     /// </summary>
     /// <param name="rect">Rect defining the local coordinate bounds.</param>
@@ -1056,8 +1088,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     {
         values.Sort();
 
-        int trim = Mathf.FloorToInt(
-            values.Count * Mathf.Clamp(trimFraction, 0f, 0.4f));
+        int trim = Mathf.FloorToInt(values.Count * Mathf.Clamp(trimFraction, 0f, 0.4f));
 
         int start = trim;
         int end = values.Count - trim;
@@ -1087,8 +1118,7 @@ public class GlobalGazeCalibrator : MonoBehaviour
     {
         values.Sort();
 
-        int trim = Mathf.FloorToInt(
-            values.Count * Mathf.Clamp(trimFraction, 0f, 0.4f));
+        int trim = Mathf.FloorToInt(values.Count * Mathf.Clamp(trimFraction, 0f, 0.4f));
 
         int start = trim;
         int end = values.Count - trim;

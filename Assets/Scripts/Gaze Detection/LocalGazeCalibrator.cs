@@ -17,19 +17,28 @@ using UnityEngine;
 /// white background to illuminate the user's face. Successful completion is shown
 /// in green.
 /// </summary>
-public class LocalGazeCalibrator : MonoBehaviour
+public sealed class LocalGazeCalibrator : MonoBehaviour
 {
     [Header("References")]
+    [Tooltip("MediaPipe runner that publishes the face landmarks used for eye measurements.")]
     [SerializeField] private FaceLandmarkerRunner faceLandmarkerRunner;
+    [Tooltip("Receives the calibrated per-eye ranges and produces normalized gaze samples.")]
     [SerializeField] private GazeVisualizer gazeVisualizer;
+    [Tooltip("Text used for countdown, failure, and completion messages.")]
     [SerializeField] private TextMeshProUGUI statusInstructionsText;
+    [Tooltip("Shared local/global calibration instruction presentation.")]
     [SerializeField] private CalibrationInstructionsUI calibrationInstructionsUI;
 
     [Header("Calibration")]
+    [Tooltip("Whole seconds shown before eye-range sample collection begins.")]
     [SerializeField] private int preCalibrationCountdownSeconds = 3;
+    [Tooltip("Seconds spent collecting raw eye-position samples.")]
     [SerializeField, Min(1f)] private float calibrationDuration = 8f;
+    [Tooltip("Lower distribution percentile retained as each eye-axis minimum.")]
     [SerializeField, Range(0f, 0.25f)] private float lowerPercentile = 0.05f;
+    [Tooltip("Upper distribution percentile retained as each eye-axis maximum.")]
     [SerializeField, Range(0.75f, 1f)] private float upperPercentile = 0.95f;
+    [Tooltip("Minimum number of valid MediaPipe samples required to accept calibration.")]
     [SerializeField, Min(10)] private int minimumSamples = 60;
 
     private readonly object _sampleLock = new object();
@@ -41,6 +50,7 @@ public class LocalGazeCalibrator : MonoBehaviour
     private GazeDebugController _debugController;
     private Coroutine _calibrationRoutine;
     private bool _isCalibrating;
+    /// <summary>Gets whether the local-calibration coroutine is currently running.</summary>
     public bool IsRunning => _calibrationRoutine != null;
 
     private void Awake()
@@ -92,8 +102,18 @@ public class LocalGazeCalibrator : MonoBehaviour
     /// </summary>
     public void RunLocalGazeCalibration()
     {
+        if (!ValidateReferences())
+            return;
+
         if (_calibrationRoutine != null)
+        {
             StopCoroutine(_calibrationRoutine);
+            _calibrationRoutine = null;
+        }
+
+        // A stopped coroutine does not run its cleanup code. Clear the sampling gate
+        // explicitly so a restarted calibration cannot collect during its countdown.
+        _isCalibrating = false;
 
         if (calibrationInstructionsUI != null)
             calibrationInstructionsUI.ShowLocal();
@@ -342,6 +362,19 @@ public class LocalGazeCalibrator : MonoBehaviour
             return values[lower];
 
         return Mathf.Lerp(values[lower], values[upper], index - lower);
+    }
+
+    /// <summary>Verifies the required local-calibration dependencies.</summary>
+    /// <returns>True when calibration can safely start.</returns>
+    private bool ValidateReferences()
+    {
+        if (faceLandmarkerRunner != null && gazeVisualizer != null)
+            return true;
+
+        Debug.LogError(
+            "[GazeLocal] Assign FaceLandmarkerRunner and GazeVisualizer before calibrating.",
+            this);
+        return false;
     }
 
     /// <summary>
