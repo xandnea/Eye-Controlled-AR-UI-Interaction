@@ -4,7 +4,7 @@ ECARUII is a Unity Android accessibility prototype combining eye-gaze interactio
 
 The project intentionally uses two independent camera paths: the rear camera handles AR/world sensing and scan-triggered detection; the front camera provides face landmarks and gaze. They meet only when the user looks at a UI control or AR annotation. This separation makes the app easier to test and debug.
 
-> **Detailed reference:** [ECARUII Outline | Script Reference and Development Guide (SOON TO BE UPLOADED)](./.docx) is Google Docs-importable and contains the development history, prefab contracts, challenges, image placeholders, and detailed script/method explanations.
+> **Detailed reference:** [ECARUII Outline | Script Reference and Development Guide](https://docs.google.com/document/d/12NwAYiVth-TJw5IjjsZ63s_6z_8N0sTc/edit?usp=sharing&ouid=107575258905610502392&rtpof=true&sd=true) is Google Docs-importable and contains the development history, prefab contracts, challenges, image placeholders, and detailed script/method explanations.
 
 ## Contents
 
@@ -167,7 +167,7 @@ DetectionAnchorManager and GazeInteractionManager expect a stable visual hierarc
 - Selection indicator with a fill image driven by dwell progress.
 - Renderer/materials compatible with the target Android graphics API.
 
-Keep prefab hierarchy names and lookup code synchronized. The [Development Guide](./ECARUII_Development_Guide.docx) includes the reviewed hierarchy and a reserved Inspector image location.
+Keep prefab hierarchy names and lookup code synchronized. The [Development Guide](https://docs.google.com/document/d/12NwAYiVth-TJw5IjjsZ63s_6z_8N0sTc/edit?usp=sharing&ouid=107575258905610502392&rtpof=true&sd=true) includes the reviewed hierarchy and a reserved Inspector image location.
 
 ### Detection-box overlay
 
@@ -240,7 +240,7 @@ The two slots let a consumer use one frame while the next is prepared. Startup s
 
 ### Documentation
 
-- [ECARUII Outline | Script Reference and Development Guide (SOON TO BE UPLOADED)](./.docx)
+- [ECARUII Outline | Script Reference and Development Guide](https://docs.google.com/document/d/12NwAYiVth-TJw5IjjsZ63s_6z_8N0sTc/edit?usp=sharing&ouid=107575258905610502392&rtpof=true&sd=true)
 - Reviewed source files: the 17 C# files included in this documentation pass
 
 ### License
