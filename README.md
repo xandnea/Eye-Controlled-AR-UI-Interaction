@@ -29,7 +29,7 @@ The project intentionally uses two independent camera paths: the rear camera han
 - **Detection:** YOLO11 segmentation through ONNX Runtime for Unity.
 - **Placement:** segmentation-mask centroid → AR depth raycast → AR anchor → inspectable prefab.
 - **Interaction:** gaze dwell, configurable cursor feedback, standard Unity UI, and optional touch inspection.
-- **Review scope:** 17 C# scripts. Several production-critical package-side classes are external to this source set, including FaceLandmarkerRunner, ONNX Runtime base helpers, and the native Vulkan bridge.
+- **Review scope:** 24 C# scripts and the native Vulkan bridge C++ implementation. Several production-critical package-side classes are external to this source set, including FaceLandmarkerRunner, ONNX Runtime base helpers, and the native Vulkan bridge.
 
 ## Architecture and complete runtime flow
 
@@ -241,7 +241,7 @@ The two slots let a consumer use one frame while the next is prepared. Startup s
 ### Documentation
 
 - [ECARUII Outline | Script Reference and Development Guide](https://docs.google.com/document/d/12NwAYiVth-TJw5IjjsZ63s_6z_8N0sTc/edit?usp=sharing&ouid=107575258905610502392&rtpof=true&sd=true)
-- Reviewed source files: the 17 C# files included in this documentation pass
+- Reviewed source files: 24 reviewed C# files and the native Vulkan bridge C++ implementation
 
 ### License
 
